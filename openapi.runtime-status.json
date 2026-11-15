@@ -999,7 +999,9 @@
                   "EVIDENCE_EXPIRED",
                   "DELIVERY_UNVERIFIED",
                   "UPGRADE_REQUIRED",
-                  "DEPENDENCY_UNVERIFIED"
+                  "DEPENDENCY_UNVERIFIED",
+                  "BUY_SUSPENSION_LATCHED",
+                  "STRATEGY_START_NOT_REACHED"
                 ],
                 "type": "string"
               },
@@ -6864,6 +6866,523 @@
         "title": "BuySignalLotReference",
         "type": "object"
       },
+      "BuySuspensionCoverage": {
+        "additionalProperties": false,
+        "description": "Compact checked prefix; validity still requires the owning storage adapter.",
+        "properties": {
+          "anchor_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Date"
+          },
+          "anchor_factor": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Factor"
+          },
+          "content_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "generation": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Generation",
+            "type": "string"
+          },
+          "through": {
+            "format": "date-time",
+            "title": "Through",
+            "type": "string"
+          }
+        },
+        "required": [
+          "through",
+          "content_hash",
+          "anchor_date",
+          "anchor_factor",
+          "generation"
+        ],
+        "title": "BuySuspensionCoverage",
+        "type": "object"
+      },
+      "BuySuspensionDefinition": {
+        "additionalProperties": false,
+        "description": "One plan-wide persistent BUY guard; recovery is reviewed replacement only.",
+        "properties": {
+          "condition": {
+            "$ref": "#/components/schemas/MinuteCloseBelow"
+          },
+          "effective_from": {
+            "format": "date-time",
+            "title": "Effective From",
+            "type": "string"
+          }
+        },
+        "required": [
+          "condition",
+          "effective_from"
+        ],
+        "title": "BuySuspensionDefinition",
+        "type": "object"
+      },
+      "BuySuspensionDraftDefinition": {
+        "additionalProperties": false,
+        "description": "Preserve unresolved guard inputs without granting executable authority.",
+        "properties": {
+          "condition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MinuteCloseBelow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          }
+        },
+        "required": [
+          "condition",
+          "effective_from"
+        ],
+        "title": "BuySuspensionDraftDefinition",
+        "type": "object"
+      },
+      "BuySuspensionPriceBasis": {
+        "additionalProperties": false,
+        "description": "Private adapter input, not provider verification or registration authority.\n\nThe adapter must obtain actual unadjusted stk_mins semantics and factors.\nEquality to the actual current anchor, not equality to 1, permits comparison.",
+        "properties": {
+          "anchor_date": {
+            "format": "date",
+            "title": "Anchor Date",
+            "type": "string"
+          },
+          "anchor_factor": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Anchor Factor",
+            "type": "string"
+          },
+          "source_contract": {
+            "const": "TUSHARE_STK_MINS_241_END_V1",
+            "title": "Source Contract",
+            "type": "string"
+          },
+          "trade_date": {
+            "format": "date",
+            "title": "Trade Date",
+            "type": "string"
+          },
+          "trade_date_factor": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Trade Date Factor",
+            "type": "string"
+          },
+          "verified_at": {
+            "format": "date-time",
+            "title": "Verified At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_contract",
+          "trade_date",
+          "anchor_date",
+          "trade_date_factor",
+          "anchor_factor",
+          "verified_at"
+        ],
+        "title": "BuySuspensionPriceBasis",
+        "type": "object"
+      },
+      "BuySuspensionReplacementBinding": {
+        "additionalProperties": false,
+        "description": "Bounded reviewed receipt; only the activation writer can apply its decision.",
+        "properties": {
+          "authority_granted": {
+            "const": false,
+            "default": false,
+            "title": "Authority Granted",
+            "type": "boolean"
+          },
+          "confirmed_at": {
+            "format": "date-time",
+            "title": "Confirmed At",
+            "type": "string"
+          },
+          "evidence_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Evidence Hash",
+            "type": "string"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/BuySuspensionReplacementIntent"
+          },
+          "new_content_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "New Content Hash",
+            "type": "string"
+          },
+          "new_guard": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuySuspensionDefinition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "new_plan_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "New Plan Hash",
+            "type": "string"
+          },
+          "new_plan_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "New Plan Id",
+            "type": "string"
+          },
+          "new_plan_version": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "New Plan Version",
+            "type": "integer"
+          },
+          "new_plan_version_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "New Plan Version Id",
+            "type": "string"
+          },
+          "new_review_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "New Review Id",
+            "type": "string"
+          },
+          "new_review_revision": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "New Review Revision",
+            "type": "integer"
+          },
+          "new_source_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "New Source Hash",
+            "type": "string"
+          },
+          "predecessor_activation_revision": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Predecessor Activation Revision",
+            "type": "integer"
+          },
+          "predecessor_content_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Predecessor Content Hash",
+            "type": "string"
+          },
+          "predecessor_guard": {
+            "$ref": "#/components/schemas/BuySuspensionDefinition"
+          },
+          "predecessor_guard_owner_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predecessor Guard Owner Hash"
+          },
+          "predecessor_guard_owner_plan_version_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predecessor Guard Owner Plan Version Id"
+          },
+          "predecessor_plan_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Predecessor Plan Hash",
+            "type": "string"
+          },
+          "predecessor_plan_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Predecessor Plan Id",
+            "type": "string"
+          },
+          "predecessor_plan_version": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Predecessor Plan Version",
+            "type": "integer"
+          },
+          "predecessor_plan_version_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Predecessor Plan Version Id",
+            "type": "string"
+          },
+          "predecessor_review_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Predecessor Review Id",
+            "type": "string"
+          },
+          "predecessor_review_revision": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Predecessor Review Revision",
+            "type": "integer"
+          },
+          "predecessor_source_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Predecessor Source Hash",
+            "type": "string"
+          },
+          "predecessor_state_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predecessor State Hash"
+          },
+          "predecessor_state_revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Predecessor State Revision",
+            "type": "integer"
+          },
+          "predecessor_unresolved_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predecessor Unresolved From"
+          },
+          "predecessor_unresolved_through": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predecessor Unresolved Through"
+          },
+          "symbol": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "version": {
+            "const": "buy-suspension-replacement-v1",
+            "default": "buy-suspension-replacement-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidence_hash",
+          "symbol",
+          "predecessor_plan_version_id",
+          "predecessor_plan_id",
+          "predecessor_plan_version",
+          "predecessor_plan_hash",
+          "predecessor_content_hash",
+          "predecessor_source_hash",
+          "predecessor_review_id",
+          "predecessor_review_revision",
+          "predecessor_activation_revision",
+          "predecessor_guard",
+          "predecessor_state_hash",
+          "predecessor_state_revision",
+          "predecessor_unresolved_from",
+          "predecessor_unresolved_through",
+          "new_plan_version_id",
+          "new_plan_id",
+          "new_plan_version",
+          "new_plan_hash",
+          "new_content_hash",
+          "new_source_hash",
+          "new_review_id",
+          "new_review_revision",
+          "new_guard",
+          "intent",
+          "confirmed_at"
+        ],
+        "title": "BuySuspensionReplacementBinding",
+        "type": "object"
+      },
+      "BuySuspensionReplacementIntent": {
+        "additionalProperties": false,
+        "description": "Human source-bound proposal; it carries no predecessor or activation authority.",
+        "properties": {
+          "acknowledge_unverified_predecessor": {
+            "title": "Acknowledge Unverified Predecessor",
+            "type": "boolean"
+          },
+          "authority_granted": {
+            "const": false,
+            "default": false,
+            "title": "Authority Granted",
+            "type": "boolean"
+          },
+          "candidate_content_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Candidate Content Hash",
+            "type": "string"
+          },
+          "excerpt": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "replacement_reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Replacement Reason",
+            "type": "string"
+          },
+          "retire_predecessor_guard": {
+            "title": "Retire Predecessor Guard",
+            "type": "boolean"
+          },
+          "source_end": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 150000.0,
+            "title": "Source End",
+            "type": "integer"
+          },
+          "source_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Hash",
+            "type": "string"
+          },
+          "source_start": {
+            "maximum": 150000.0,
+            "minimum": 0.0,
+            "title": "Source Start",
+            "type": "integer"
+          },
+          "strategy_effective_from": {
+            "format": "date-time",
+            "title": "Strategy Effective From",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_hash",
+          "candidate_content_hash",
+          "source_start",
+          "source_end",
+          "excerpt",
+          "replacement_reason",
+          "retire_predecessor_guard",
+          "acknowledge_unverified_predecessor",
+          "strategy_effective_from"
+        ],
+        "title": "BuySuspensionReplacementIntent",
+        "type": "object"
+      },
+      "BuySuspensionTrigger": {
+        "additionalProperties": false,
+        "properties": {
+          "bar_end": {
+            "format": "date-time",
+            "title": "Bar End",
+            "type": "string"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/BuySuspensionPriceBasis"
+          },
+          "close_fen": {
+            "exclusiveMinimum": 0.0,
+            "title": "Close Fen",
+            "type": "integer"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "source_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bar_end",
+          "close_fen",
+          "source_hash",
+          "basis",
+          "observed_at"
+        ],
+        "title": "BuySuspensionTrigger",
+        "type": "object"
+      },
       "CalendarScopeView": {
         "additionalProperties": false,
         "properties": {
@@ -10544,7 +11063,9 @@
                   "EVIDENCE_EXPIRED",
                   "DELIVERY_UNVERIFIED",
                   "UPGRADE_REQUIRED",
-                  "DEPENDENCY_UNVERIFIED"
+                  "DEPENDENCY_UNVERIFIED",
+                  "BUY_SUSPENSION_LATCHED",
+                  "STRATEGY_START_NOT_REACHED"
                 ],
                 "type": "string"
               },
@@ -11501,6 +12022,122 @@
         "title": "DailyAny",
         "type": "object"
       },
+      "DailyBuySuspensionState": {
+        "additionalProperties": false,
+        "description": "One immutable original guard owner with resumable coverage and a durable latch.",
+        "properties": {
+          "birth_activation_revision": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Birth Activation Revision",
+            "type": "integer"
+          },
+          "blocker": {
+            "anyOf": [
+              {
+                "enum": [
+                  "HISTORY_PENDING",
+                  "START_NOT_REACHED",
+                  "MINUTE_GAP",
+                  "CALENDAR_UNVERIFIED",
+                  "PRICE_BASIS_UNVERIFIED",
+                  "SOURCE_UNVERIFIED",
+                  "PROOF_INVALIDATED",
+                  "GENERATION_CHANGED",
+                  "BATCH_BUDGET_EXHAUSTED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "HISTORY_PENDING",
+            "title": "Blocker"
+          },
+          "content_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuySuspensionCoverage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "definition": {
+            "$ref": "#/components/schemas/BuySuspensionDefinition"
+          },
+          "evaluated_at": {
+            "format": "date-time",
+            "title": "Evaluated At",
+            "type": "string"
+          },
+          "owner_plan_version_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Owner Plan Version Id",
+            "type": "string"
+          },
+          "review_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "title": "Review Id",
+            "type": "string"
+          },
+          "source_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Hash",
+            "type": "string"
+          },
+          "symbol": {
+            "pattern": "^[0-9]{6}\\.(?:SH|SZ|BJ)$",
+            "title": "Symbol",
+            "type": "string"
+          },
+          "target": {
+            "format": "date-time",
+            "title": "Target",
+            "type": "string"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuySuspensionTrigger"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "const": "buy-suspension-state-v1",
+            "default": "buy-suspension-state-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "owner_plan_version_id",
+          "content_hash",
+          "source_hash",
+          "review_id",
+          "birth_activation_revision",
+          "definition",
+          "evaluated_at",
+          "target"
+        ],
+        "title": "DailyBuySuspensionState",
+        "type": "object"
+      },
       "DailyCandleRatio": {
         "additionalProperties": false,
         "properties": {
@@ -12087,6 +12724,18 @@
       "DailyEditorSchemaView": {
         "additionalProperties": false,
         "properties": {
+          "buySuspensionCandidateSchema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buysuspensioncandidateschema"
+          },
           "candidateSchema": {
             "additionalProperties": true,
             "title": "Candidateschema",
@@ -12143,7 +12792,8 @@
               6,
               7,
               8,
-              9
+              9,
+              10
             ],
             "items": {
               "type": "integer"
@@ -12181,6 +12831,71 @@
             "maxItems": 10,
             "title": "Alerts",
             "type": "array"
+          },
+          "buySuspensionBlocker": {
+            "anyOf": [
+              {
+                "enum": [
+                  "BUY_SUSPENSION_UNVERIFIED",
+                  "BUY_SUSPENSION_LATCHED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buysuspensionblocker"
+          },
+          "buySuspensionOwnerPlanVersionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buysuspensionownerplanversionid"
+          },
+          "buySuspensionRevision": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buysuspensionrevision"
+          },
+          "buySuspensionSkippedRules": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 2,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buysuspensionskippedrules"
+          },
+          "buySuspensionTarget": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buysuspensiontarget"
           },
           "contentHash": {
             "pattern": "^[0-9a-f]{64}$",
@@ -13656,6 +14371,16 @@
       "DailyReviewPreview": {
         "additionalProperties": false,
         "properties": {
+          "buySuspensionReplacementIntent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuySuspensionReplacementIntent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "candidateJson": {
             "maxLength": 262144,
             "minLength": 2,
@@ -15829,10 +16554,34 @@
       "DailySupplement": {
         "additionalProperties": false,
         "properties": {
+          "buy_suspension_clarification": {
+            "anyOf": [
+              {
+                "const": "ALL_PLAN_BUY_REVIEWED_REPLACEMENT_ONLY",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buy Suspension Clarification"
+          },
           "candidate_content_hash": {
             "pattern": "^[0-9a-f]{64}$",
             "title": "Candidate Content Hash",
             "type": "string"
+          },
+          "obligation_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Obligation Id"
           },
           "path": {
             "maxLength": 512,
@@ -15845,6 +16594,18 @@
             "minLength": 1,
             "title": "Reason",
             "type": "string"
+          },
+          "source_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Hash"
           },
           "supplement_id": {
             "maxLength": 128,
@@ -15870,6 +16631,16 @@
       "DailySupplementCommand": {
         "additionalProperties": false,
         "properties": {
+          "buySuspensionReplacementIntent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuySuspensionReplacementIntent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "candidateJson": {
             "maxLength": 262144,
             "minLength": 2,
@@ -15889,12 +16660,24 @@
             "title": "Expectedrevision",
             "type": "integer"
           },
+          "sourceText": {
+            "anyOf": [
+              {
+                "maxLength": 150000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcetext"
+          },
           "supplements": {
             "items": {
               "$ref": "#/components/schemas/DailySupplement"
             },
             "maxItems": 2000,
-            "minItems": 1,
             "title": "Supplements",
             "type": "array"
           }
@@ -21512,6 +22295,12 @@
         "additionalProperties": false,
         "description": "Backend-owned capability for the single current plan workflow.",
         "properties": {
+          "buySuspensionExecutionVersion": {
+            "const": "condition-plan-v6",
+            "default": "condition-plan-v6",
+            "title": "Buysuspensionexecutionversion",
+            "type": "string"
+          },
           "capitalExecutionVersion": {
             "const": "condition-plan-v5",
             "default": "condition-plan-v5",
@@ -21597,7 +22386,8 @@
               6,
               7,
               8,
-              9
+              9,
+              10
             ],
             "items": {
               "type": "integer"
@@ -38226,6 +39016,174 @@
         "title": "ReadinessAssessment",
         "type": "object"
       },
+      "ReadinessBuySuspension": {
+        "additionalProperties": false,
+        "description": "Original native guard evidence, separate from monitoring health or trade authority.",
+        "properties": {
+          "birthActivationRevision": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Birthactivationrevision"
+          },
+          "blocker": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocker"
+          },
+          "definition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuySuspensionDraftDefinition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maintenance": {
+            "$ref": "#/components/schemas/AxisReadiness"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "UNVERIFIED",
+                  "CLEAR_THROUGH_TARGET",
+                  "LATCHED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "ownerHash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ownerhash"
+          },
+          "ownerPlanVersionId": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ownerplanversionid"
+          },
+          "replacement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuySuspensionReplacementBinding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skippedRules": {
+            "default": [],
+            "items": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 2,
+            "title": "Skippedrules",
+            "type": "array"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyBuySuspensionState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stateRevision": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staterevision"
+          },
+          "strategyEffectiveFrom": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategyeffectivefrom"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "ownerPlanVersionId",
+          "ownerHash",
+          "birthActivationRevision",
+          "definition",
+          "state",
+          "stateRevision",
+          "target",
+          "outcome",
+          "maintenance",
+          "blocker"
+        ],
+        "title": "ReadinessBuySuspension",
+        "type": "object"
+      },
       "ReadinessContext": {
         "additionalProperties": false,
         "description": "Admitted read context, not every referenced evidence's original plan owner.\n\nExisting binding values confer no permission. Original risk ownership can\ndiffer from this read's active version and remains in the evidence references.",
@@ -39098,6 +40056,16 @@
             "minItems": 6,
             "title": "Axes",
             "type": "array"
+          },
+          "buySuspension": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessBuySuspension"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "computedAt": {
             "format": "date-time",
@@ -42081,7 +43049,9 @@
                   "EVIDENCE_EXPIRED",
                   "DELIVERY_UNVERIFIED",
                   "UPGRADE_REQUIRED",
-                  "DEPENDENCY_UNVERIFIED"
+                  "DEPENDENCY_UNVERIFIED",
+                  "BUY_SUSPENSION_LATCHED",
+                  "STRATEGY_START_NOT_REACHED"
                 ],
                 "type": "string"
               },
@@ -42099,7 +43069,8 @@
               "AWAITING_FIRST_EVALUATION",
               "MISSING_INPUT",
               "BLOCKED",
-              "UNKNOWN"
+              "UNKNOWN",
+              "BUY_SUSPENDED"
             ],
             "title": "State",
             "type": "string"

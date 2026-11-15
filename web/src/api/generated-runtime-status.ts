@@ -147,7 +147,7 @@ export type AuthoritativeDecisionView = {
 export type AxisReadiness = {
   axis: "SOURCE_COVERAGE" | "REVIEW_ACTIVATION" | "RUNTIME_OWNERSHIP" | "DATA_EVALUATION" | "INVENTORY_CAPITAL" | "NOTIFICATION_DELIVERY";
   observation?: (components["schemas"]["ReadinessObservation"]) | (null);
-  reason?: ("SOURCE_REVIEW_REQUIRED" | "SAFETY_BLOCKED" | "CONFIGURATION_BLOCKED" | "MISSING_DATA" | "STALE_DATA" | "UNDEFINED_RULE" | "HUMAN_EVIDENCE_REQUIRED" | "EXPECTED_CONFIRMATION" | "SERVICE_PENDING" | "AWAITING_FIRST_EVALUATION" | "AUTHORITY_UNAVAILABLE" | "CONTEXT_CHANGED" | "TARGET_MISMATCH" | "EVIDENCE_EXPIRED" | "DELIVERY_UNVERIFIED" | "UPGRADE_REQUIRED" | "DEPENDENCY_UNVERIFIED") | (null);
+  reason?: ("SOURCE_REVIEW_REQUIRED" | "SAFETY_BLOCKED" | "CONFIGURATION_BLOCKED" | "MISSING_DATA" | "STALE_DATA" | "UNDEFINED_RULE" | "HUMAN_EVIDENCE_REQUIRED" | "EXPECTED_CONFIRMATION" | "SERVICE_PENDING" | "AWAITING_FIRST_EVALUATION" | "AUTHORITY_UNAVAILABLE" | "CONTEXT_CHANGED" | "TARGET_MISMATCH" | "EVIDENCE_EXPIRED" | "DELIVERY_UNVERIFIED" | "UPGRADE_REQUIRED" | "DEPENDENCY_UNVERIFIED" | "BUY_SUSPENSION_LATCHED" | "STRATEGY_START_NOT_REACHED") | (null);
   state: "PASS" | "WAIT" | "BLOCKED" | "UNKNOWN" | "NOT_APPLICABLE";
 };
 
@@ -1056,6 +1056,88 @@ export type BuySignalLotReference = {
   signal_id: string;
 };
 
+export type BuySuspensionCoverage = {
+  anchor_date: (string) | (null);
+  anchor_factor: (string) | (null);
+  content_hash: string;
+  generation: string;
+  through: string;
+};
+
+export type BuySuspensionDefinition = {
+  condition: components["schemas"]["MinuteCloseBelow"];
+  effective_from: string;
+};
+
+export type BuySuspensionDraftDefinition = {
+  condition: (components["schemas"]["MinuteCloseBelow"]) | (null);
+  effective_from: (string) | (null);
+};
+
+export type BuySuspensionPriceBasis = {
+  anchor_date: string;
+  anchor_factor: string;
+  source_contract: "TUSHARE_STK_MINS_241_END_V1";
+  trade_date: string;
+  trade_date_factor: string;
+  verified_at: string;
+};
+
+export type BuySuspensionReplacementBinding = {
+  authority_granted?: false;
+  confirmed_at: string;
+  evidence_hash: string;
+  intent: components["schemas"]["BuySuspensionReplacementIntent"];
+  new_content_hash: string;
+  new_guard: (components["schemas"]["BuySuspensionDefinition"]) | (null);
+  new_plan_hash: string;
+  new_plan_id: string;
+  new_plan_version: number;
+  new_plan_version_id: string;
+  new_review_id: string;
+  new_review_revision: number;
+  new_source_hash: string;
+  predecessor_activation_revision: number;
+  predecessor_content_hash: string;
+  predecessor_guard: components["schemas"]["BuySuspensionDefinition"];
+  predecessor_guard_owner_hash?: (string) | (null);
+  predecessor_guard_owner_plan_version_id?: (string) | (null);
+  predecessor_plan_hash: string;
+  predecessor_plan_id: string;
+  predecessor_plan_version: number;
+  predecessor_plan_version_id: string;
+  predecessor_review_id: string;
+  predecessor_review_revision: number;
+  predecessor_source_hash: string;
+  predecessor_state_hash: (string) | (null);
+  predecessor_state_revision: number;
+  predecessor_unresolved_from: (string) | (null);
+  predecessor_unresolved_through: (string) | (null);
+  symbol: string;
+  version?: "buy-suspension-replacement-v1";
+};
+
+export type BuySuspensionReplacementIntent = {
+  acknowledge_unverified_predecessor: boolean;
+  authority_granted?: false;
+  candidate_content_hash: string;
+  excerpt: string;
+  replacement_reason: string;
+  retire_predecessor_guard: boolean;
+  source_end: number;
+  source_hash: string;
+  source_start: number;
+  strategy_effective_from: string;
+};
+
+export type BuySuspensionTrigger = {
+  bar_end: string;
+  basis: components["schemas"]["BuySuspensionPriceBasis"];
+  close_fen: number;
+  observed_at: string;
+  source_hash: string;
+};
+
 export type CalendarScopeView = {
   dataCutoff: (string) | (null);
   kind: "CALENDAR";
@@ -1566,7 +1648,7 @@ export type ConditionPlanEntryView = {
 export type ConditionReadiness = {
   conditionPath: string;
   evidenceRefs?: Array<string>;
-  reason?: ("SOURCE_REVIEW_REQUIRED" | "SAFETY_BLOCKED" | "CONFIGURATION_BLOCKED" | "MISSING_DATA" | "STALE_DATA" | "UNDEFINED_RULE" | "HUMAN_EVIDENCE_REQUIRED" | "EXPECTED_CONFIRMATION" | "SERVICE_PENDING" | "AWAITING_FIRST_EVALUATION" | "AUTHORITY_UNAVAILABLE" | "CONTEXT_CHANGED" | "TARGET_MISMATCH" | "EVIDENCE_EXPIRED" | "DELIVERY_UNVERIFIED" | "UPGRADE_REQUIRED" | "DEPENDENCY_UNVERIFIED") | (null);
+  reason?: ("SOURCE_REVIEW_REQUIRED" | "SAFETY_BLOCKED" | "CONFIGURATION_BLOCKED" | "MISSING_DATA" | "STALE_DATA" | "UNDEFINED_RULE" | "HUMAN_EVIDENCE_REQUIRED" | "EXPECTED_CONFIRMATION" | "SERVICE_PENDING" | "AWAITING_FIRST_EVALUATION" | "AUTHORITY_UNAVAILABLE" | "CONTEXT_CHANGED" | "TARGET_MISMATCH" | "EVIDENCE_EXPIRED" | "DELIVERY_UNVERIFIED" | "UPGRADE_REQUIRED" | "DEPENDENCY_UNVERIFIED" | "BUY_SUSPENSION_LATCHED" | "STRATEGY_START_NOT_REACHED") | (null);
   state: "CONDITION_TRUE" | "CONDITION_FALSE" | "MISSING_INPUT" | "BLOCKED" | "UNKNOWN";
 };
 
@@ -1694,6 +1776,22 @@ export type DailyAny = {
   type: "ANY";
 };
 
+export type DailyBuySuspensionState = {
+  birth_activation_revision: number;
+  blocker?: ("HISTORY_PENDING" | "START_NOT_REACHED" | "MINUTE_GAP" | "CALENDAR_UNVERIFIED" | "PRICE_BASIS_UNVERIFIED" | "SOURCE_UNVERIFIED" | "PROOF_INVALIDATED" | "GENERATION_CHANGED" | "BATCH_BUDGET_EXHAUSTED") | (null);
+  content_hash: string;
+  coverage?: (components["schemas"]["BuySuspensionCoverage"]) | (null);
+  definition: components["schemas"]["BuySuspensionDefinition"];
+  evaluated_at: string;
+  owner_plan_version_id: string;
+  review_id: string;
+  source_hash: string;
+  symbol: string;
+  target: string;
+  trigger?: (components["schemas"]["BuySuspensionTrigger"]) | (null);
+  version?: "buy-suspension-state-v1";
+};
+
 export type DailyCandleRatio = {
   comparator: "LT" | "LTE" | "EQ" | "GTE" | "GT";
   component: "LOWER_WICK" | "UPPER_WICK" | "BODY";
@@ -1766,6 +1864,9 @@ export type DailyDraftZone = {
 };
 
 export type DailyEditorSchemaView = {
+  buySuspensionCandidateSchema?: ({
+    [key: string]: unknown;
+  }) | (null);
   candidateSchema: {
     [key: string]: unknown;
   };
@@ -1797,6 +1898,11 @@ export type DailyEditorSchemaView = {
 export type DailyEvaluationApiView = {
   activationRevision: number;
   alerts?: Array<components["schemas"]["DailyRuleReminderState"]>;
+  buySuspensionBlocker?: ("BUY_SUSPENSION_UNVERIFIED" | "BUY_SUSPENSION_LATCHED") | (null);
+  buySuspensionOwnerPlanVersionId?: (string) | (null);
+  buySuspensionRevision?: (number) | (null);
+  buySuspensionSkippedRules?: (Array<string>) | (null);
+  buySuspensionTarget?: (string) | (null);
   contentHash: string;
   dailyEvidence: (components["schemas"]["DailySeries"]) | (null);
   dataBlockers: Array<string>;
@@ -2020,6 +2126,7 @@ export type DailyReviewIssue = {
 };
 
 export type DailyReviewPreview = {
+  buySuspensionReplacementIntent?: (components["schemas"]["BuySuspensionReplacementIntent"]) | (null);
   candidateJson: string;
   review: components["schemas"]["DailyReviewSnapshot"];
   supplementRevision: number;
@@ -2291,17 +2398,22 @@ export type DailyStateView = {
 };
 
 export type DailySupplement = {
+  buy_suspension_clarification?: ("ALL_PLAN_BUY_REVIEWED_REPLACEMENT_ONLY") | (null);
   candidate_content_hash: string;
+  obligation_id?: (string) | (null);
   path: string;
   reason: string;
+  source_hash?: (string) | (null);
   supplement_id: string;
   value: components["schemas"]["JsonValue"];
 };
 
 export type DailySupplementCommand = {
+  buySuspensionReplacementIntent?: (components["schemas"]["BuySuspensionReplacementIntent"]) | (null);
   candidateJson: string;
   contentHash: string;
   expectedRevision: number;
+  sourceText?: (string) | (null);
   supplements: Array<components["schemas"]["DailySupplement"]>;
 };
 
@@ -3040,6 +3152,7 @@ export type ExplicitConditionEvidenceView = {
 };
 
 export type ExplicitPlanCapabilityView = {
+  buySuspensionExecutionVersion?: "condition-plan-v6";
   capitalExecutionVersion?: "condition-plan-v5";
   exceptionExecutionVersion?: "condition-plan-v3";
   executionMode?: "CONDITION_PLAN";
@@ -5252,6 +5365,22 @@ export type ReadinessAssessment = {
   summary: "READY_FOR_MONITORING" | "WAITING_EXPECTED_CONFIRMATION" | "WAITING_REQUIRED_SERVICE" | "NEEDS_REVIEW" | "BLOCKED" | "UNKNOWN";
 };
 
+export type ReadinessBuySuspension = {
+  birthActivationRevision: (number) | (null);
+  blocker: (string) | (null);
+  definition: (components["schemas"]["BuySuspensionDraftDefinition"]) | (null);
+  maintenance: components["schemas"]["AxisReadiness"];
+  outcome: ("UNVERIFIED" | "CLEAR_THROUGH_TARGET" | "LATCHED") | (null);
+  ownerHash: (string) | (null);
+  ownerPlanVersionId: (string) | (null);
+  replacement?: (components["schemas"]["BuySuspensionReplacementBinding"]) | (null);
+  skippedRules?: Array<string>;
+  state: (components["schemas"]["DailyBuySuspensionState"]) | (null);
+  stateRevision: (number) | (null);
+  strategyEffectiveFrom?: (string) | (null);
+  target: (string) | (null);
+};
+
 export type ReadinessContext = {
   activationRevision: (number) | (null);
   bookRevision?: (number) | (null);
@@ -5358,6 +5487,7 @@ export type ReadinessRiskOrigin = {
 
 export type ReadinessSnapshot = {
   axes: Array<components["schemas"]["AxisReadiness"]>;
+  buySuspension?: (components["schemas"]["ReadinessBuySuspension"]) | (null);
   computedAt: string;
   context: components["schemas"]["ReadinessContext"];
   rules: Array<components["schemas"]["RuleReadinessFacts"]>;
@@ -5767,8 +5897,8 @@ export type RuleEligibilityView = {
 
 export type RuleReadiness = {
   facts: components["schemas"]["RuleReadinessFacts"];
-  reason?: ("SOURCE_REVIEW_REQUIRED" | "SAFETY_BLOCKED" | "CONFIGURATION_BLOCKED" | "MISSING_DATA" | "STALE_DATA" | "UNDEFINED_RULE" | "HUMAN_EVIDENCE_REQUIRED" | "EXPECTED_CONFIRMATION" | "SERVICE_PENDING" | "AWAITING_FIRST_EVALUATION" | "AUTHORITY_UNAVAILABLE" | "CONTEXT_CHANGED" | "TARGET_MISMATCH" | "EVIDENCE_EXPIRED" | "DELIVERY_UNVERIFIED" | "UPGRADE_REQUIRED" | "DEPENDENCY_UNVERIFIED") | (null);
-  state: "CONDITION_TRUE" | "CONDITION_FALSE" | "WAITING_OFFICIAL_CONFIRMATION" | "AWAITING_FIRST_EVALUATION" | "MISSING_INPUT" | "BLOCKED" | "UNKNOWN";
+  reason?: ("SOURCE_REVIEW_REQUIRED" | "SAFETY_BLOCKED" | "CONFIGURATION_BLOCKED" | "MISSING_DATA" | "STALE_DATA" | "UNDEFINED_RULE" | "HUMAN_EVIDENCE_REQUIRED" | "EXPECTED_CONFIRMATION" | "SERVICE_PENDING" | "AWAITING_FIRST_EVALUATION" | "AUTHORITY_UNAVAILABLE" | "CONTEXT_CHANGED" | "TARGET_MISMATCH" | "EVIDENCE_EXPIRED" | "DELIVERY_UNVERIFIED" | "UPGRADE_REQUIRED" | "DEPENDENCY_UNVERIFIED" | "BUY_SUSPENSION_LATCHED" | "STRATEGY_START_NOT_REACHED") | (null);
+  state: "CONDITION_TRUE" | "CONDITION_FALSE" | "WAITING_OFFICIAL_CONFIRMATION" | "AWAITING_FIRST_EVALUATION" | "MISSING_INPUT" | "BLOCKED" | "UNKNOWN" | "BUY_SUSPENDED";
 };
 
 export type RuleReadinessFacts = {
@@ -6862,6 +6992,13 @@ export interface components {
     BoundedCapacity: BoundedCapacity;
     BuyDebitResult: BuyDebitResult;
     BuySignalLotReference: BuySignalLotReference;
+    BuySuspensionCoverage: BuySuspensionCoverage;
+    BuySuspensionDefinition: BuySuspensionDefinition;
+    BuySuspensionDraftDefinition: BuySuspensionDraftDefinition;
+    BuySuspensionPriceBasis: BuySuspensionPriceBasis;
+    BuySuspensionReplacementBinding: BuySuspensionReplacementBinding;
+    BuySuspensionReplacementIntent: BuySuspensionReplacementIntent;
+    BuySuspensionTrigger: BuySuspensionTrigger;
     CalendarScopeView: CalendarScopeView;
     CapitalAssessment: CapitalAssessment;
     CapitalAuthorityContext: CapitalAuthorityContext;
@@ -6920,6 +7057,7 @@ export interface components {
     DailyAlertEvent: DailyAlertEvent;
     DailyAll: DailyAll;
     DailyAny: DailyAny;
+    DailyBuySuspensionState: DailyBuySuspensionState;
     DailyCandleRatio: DailyCandleRatio;
     DailyCandleRatioInput: DailyCandleRatioInput;
     DailyClause: DailyClause;
@@ -7276,6 +7414,7 @@ export interface components {
     QuantityCalculation: QuantityCalculation;
     QuantityPolicy: QuantityPolicy;
     ReadinessAssessment: ReadinessAssessment;
+    ReadinessBuySuspension: ReadinessBuySuspension;
     ReadinessContext: ReadinessContext;
     ReadinessDeliveryAttempt: ReadinessDeliveryAttempt;
     ReadinessExecutionState: ReadinessExecutionState;
