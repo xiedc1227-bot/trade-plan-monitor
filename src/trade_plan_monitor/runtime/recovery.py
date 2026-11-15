@@ -261,6 +261,7 @@ class RecoveryService:
         persist_minutes: PersistMinutes,
         is_open_on: IsOpenOn,
         realtime_pending: RealtimePending,
+        buy_suspension_pending: RealtimePending | None = None,
         pending_close_date: PendingCloseDate | None = None,
         recover_pending_close: RecoverPendingClose | None = None,
     ) -> None:
@@ -283,6 +284,9 @@ class RecoveryService:
         self._persist_minutes = persist_minutes
         self._is_open_on = is_open_on
         self._realtime_pending = realtime_pending
+        if buy_suspension_pending is not None and not callable(buy_suspension_pending):
+            raise TypeError("buy suspension pending check must be callable")
+        self._buy_suspension_pending = buy_suspension_pending or realtime_pending
         self._pending_close_date = pending_close_date
         self._recover_pending_close = recover_pending_close
         self._serial = asyncio.Lock()
@@ -302,7 +306,7 @@ class RecoveryService:
                 TushareOperation.TRADING_CALENDAR, TushareOperation.DAILY_BARS}:
             raise ValueError("unsupported suspension acquisition")
         async with self._serial:
-            if self._should_yield():
+            if self._should_yield(suspension=True):
                 return None
             try:
                 value = await self._execute_joined(symbol=symbol, fetch_current_day=call,
@@ -758,9 +762,10 @@ class RecoveryService:
         except Exception:
             return False
 
-    def _should_yield(self) -> bool:
+    def _should_yield(self, *, suspension=False) -> bool:
         try:
-            return self._realtime_pending() is not False
+            pending = self._buy_suspension_pending if suspension else self._realtime_pending
+            return pending() is not False
         except Exception:
             return True
 

@@ -815,6 +815,7 @@ class ProductionMonitorPipeline:
             persist_minutes=self.persist_minutes,
             is_open_on=self.is_open_on,
             realtime_pending=self._realtime_pending,
+            buy_suspension_pending=self._buy_suspension_pending,
         )
         self._status_progress_coverage_installed = (
             enable_runtime_status
@@ -1423,6 +1424,17 @@ class ProductionMonitorPipeline:
             or self._controller.active_count
             or self._controller.waiting_count
         ):
+            return True
+        due_at = self._gap_repair_due_at
+        return due_at is not None and self._clock.now() + _GAP_REPAIR_RESERVE >= due_at
+
+    def _buy_suspension_pending(self) -> bool:
+        """The current duty's required guard must not yield to that same duty.
+
+        Keep controller contention and the next realtime reservation intact;
+        ordinary background recovery still yields while a duty is running.
+        """
+        if self._controller.active_count or self._controller.waiting_count:
             return True
         due_at = self._gap_repair_due_at
         return due_at is not None and self._clock.now() + _GAP_REPAIR_RESERVE >= due_at
@@ -5264,6 +5276,7 @@ class ProductionMonitorPipeline:
         self._deadline_plans = tuple(selected)
         self._running_deadline = True
         self._deadline_minute_target = deadline.bar_end
+        self._gap_repair_due_at = self._next_deadline_due_at(deadline)
         try:
             result = await self.coordinator.run_deadline(deadline)
             self._running_deadline = False
@@ -5278,6 +5291,7 @@ class ProductionMonitorPipeline:
             self._running_deadline = False
             self._deadline_plans = None
             self._deadline_minute_target = None
+            self._gap_repair_due_at = None
 
     async def _refresh_dashboard_indexes(
         self,
