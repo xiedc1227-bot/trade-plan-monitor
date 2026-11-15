@@ -1,3 +1,7 @@
+import { defineComponent, h } from "vue";
+import { apiFetchKey } from "../../src/api/context";
+import { isConditionPlanJson } from "../../src/api/conditionPlans";
+import { usePlanWorkspace } from "../../src/composables/usePlanWorkspace";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { routes } from "../../src/router";
@@ -38,5 +42,35 @@ describe("one plan workspace", () => {
     expect(wrapper.findComponent({ name: "PositionLots" }).exists()).toBe(false);
     expect(wrapper.findComponent({ name: "PositionInventoryPanel" }).exists()).toBe(false);
     expect(wrapper.findComponent({ name: "ManualEventRiskPanel" }).exists()).toBe(false);
+  });
+});
+
+
+describe("PBS current editor admission", () => {
+  it.each([[10, "condition-plan-v6", true], [10, "condition-plan-v1", false],
+    [9, "condition-plan-v6", false], [5, "condition-plan-v1", true]] as const)(
+    "admits only exact schema/version %s %s", (schema_version, execution_version, expected) => {
+      expect(isConditionPlanJson(JSON.stringify({ schema_version, execution_version, execution_mode: "CONDITION_PLAN" }))).toBe(expected);
+    });
+  it("selects the server's dedicated guard schema and retains legacy ordinary selection", async () => {
+    let work!: ReturnType<typeof usePlanWorkspace>;
+    const fetcher = vi.fn<typeof fetch>(async input => {
+      const url = String(input);
+      const body = url.endsWith("plan-editor-schema") ? {
+        candidateSchema: { title: "ordinary" }, buySuspensionCandidateSchema: { title: "guard", $defs: { Guard: { title: "guard-definition" } } }, operationSchemas: {},
+      } : url.endsWith("ai-runtime") ? { providerId: "offline", configured: true, enabled: true }
+        : { items: [], total: 0, limit: 100, offset: 0 };
+      return new Response(JSON.stringify(body));
+    });
+    const wrapper = mount(defineComponent({ setup() { work = usePlanWorkspace(); return () => h("div"); } }),
+      { global: { provide: { [apiFetchKey as symbol]: fetcher } } });
+    try {
+      await work.load();
+      work.edit({ schema_version: 10 });
+      expect(work.schema.value.title).toBe("guard");
+      expect(work.definitions.value.Guard?.title).toBe("guard-definition");
+      work.edit({ schema_version: 5 });
+      expect(work.schema.value.title).toBe("ordinary");
+    } finally { wrapper.unmount(); }
   });
 });

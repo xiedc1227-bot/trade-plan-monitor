@@ -25,7 +25,7 @@ function versionView(raw = candidate, mapping = originalMapping, id = savedVersi
     reviewIssues: [], validationIssues: [], canActivate: false };
 }
 
-function harness() {
+function harness(registeredIntent?: object) {
   let registered: DailySupplement[] = [];
   let revision = 0;
   const commands: { expectedRevision: number; supplements: DailySupplement[] }[] = [];
@@ -40,7 +40,7 @@ function harness() {
       const mapping = { ...(body.mapping ?? originalMapping), candidate_content_hash: hash,
         supplements: exact, bindings: exact.map(s => ({ path: s.path, value: s.value,
           origin: "HUMAN_SUPPLEMENT", unit: "JSON", clause_ids: [], supplement_id: s.supplement_id })) };
-      result = { candidateJson: body.candidateJson, supplementRevision: exact === registered ? revision : 0,
+      result = { candidateJson: body.candidateJson, buySuspensionReplacementIntent: registeredIntent, supplementRevision: exact === registered ? revision : 0,
         review: { content_hash: hash, source_hash: "c".repeat(64), evidence_hash: "d".repeat(64), mapping, issues: [] } };
     } else if (url.endsWith("plan-review-supplements")) {
       commands.push(body);
@@ -115,4 +115,24 @@ describe("daily human supplement batches", () => {
     expect(work.mapping.value?.supplements[0]?.candidate_content_hash).toBe("a".repeat(64));
     wrapper.unmount();
   });
+});
+
+
+it("does not register a replacement from an absent source statement or auto-review it", async () => {
+  const { work, wrapper, commands } = harness();
+  await work.load(savedVersionId);
+  await work.registerBuySuspensionReplacement({ excerpt: "Not present in the source", reason: "Explicit intended new strategy replacement for this source", strategyStart: "2026-11-15T09:30:00+08:00", retire: true, acknowledge: false });
+  expect(commands).toEqual([]); expect(work.error.value).not.toBe("");
+  wrapper.unmount();
+});
+
+it("preserves a server-registered replacement intent when adding other policy supplements", async () => {
+  const intent = { source_hash: "c".repeat(64), candidate_content_hash: "a".repeat(64), source_start: 0, source_end: 1,
+    excerpt: "S", replacement_reason: "Synthetic explicit source replacement reason", retire_predecessor_guard: true,
+    acknowledge_unverified_predecessor: false, strategy_effective_from: "2026-11-15T09:30:00+08:00", authority_granted: false };
+  const { work, wrapper, fetcher } = harness(intent);
+  await work.supplement([{ path: "levels.risk_line_fen", reason: "Other explicitly registered human policy evidence" }], []);
+  const sent = fetcher.mock.calls.find(([url]) => String(url).endsWith("plan-review-supplements"));
+  expect(JSON.parse(String(sent?.[1]?.body))).toMatchObject({ sourceText: "Synthetic source", buySuspensionReplacementIntent: intent });
+  wrapper.unmount();
 });

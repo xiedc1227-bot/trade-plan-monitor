@@ -396,3 +396,101 @@ describe("actual plan workbench source coverage owner", () => {
     expect(work.sourceCoverage.page.value).toBeNull();
   });
 });
+
+
+describe("PBS source-bound workflow", () => {
+  function pbsRecords(records: Map<string, PlanVersionView>) {
+    const v = records.get(id(1))!, raw = JSON.parse(v.planJson);
+    Object.assign(raw, { schema_version: 10, execution_version: "condition-plan-v6", buy_suspension: {
+      condition: { type: "MINUTE_CLOSE_BELOW", timeframe_minutes: 5, price_fen: 2420 }, effective_from: "2026-09-30T09:30:00+08:00" } });
+    v.planJson = JSON.stringify(raw); v.planHash = hash(v.planJson); v.sourceCoverage = summary(v);
+  }
+  it("loads all coverage pages and registers only the exact server obligation", async () => {
+    let records!: Map<string, PlanVersionView>;
+    const { wrapper, work, calls } = harness({ configure: r => { pbsRecords(r); records = r; }, intercept: c => {
+      if (c.url.includes("source-coverage?") && c.url.includes("limit=100")) {
+        const body = page(records.get(id(1))!); body.limit = 100;
+        const next = c.url.includes("cursor="); body.items[0]!.rowIndex = next ? 1 : 0;
+        if (next && body.items[0]!.kind === "OBLIGATION") Object.assign(body.items[0]!.obligation, {
+          obligationId: hash("guard"), semanticsJson: JSON.stringify({ treatment: "PERSISTENT_BUY_SUSPENSION" }), scope: "BUY" });
+        body.nextCursor = next ? null : "wire-next-page"; return response(body);
+      }
+      if (c.url.endsWith("plan-review-supplements")) return response({ revision: 1 });
+    } });
+    await loaded(wrapper); await work.loadBuySuspensionObligations();
+    expect(work.buySuspensionObligations.value.map(o => o.obligationId)).toEqual([hash("guard")]);
+    await work.registerBuySuspensionClarification(hash("guard"), "Explicitly register this exact source guard and approved checking start");
+    expect(work.error.value).toBe("");
+    const command = calls.find(c => c.url.endsWith("plan-review-supplements"))!;
+    expect(command.body.sourceText).toBe(source);
+    expect(command.body.supplements).toHaveLength(4);
+    expect(command.body.supplements.every((s: Record<string, unknown>) => s.source_hash === hash(source) && s.obligation_id === hash("guard") && s.buy_suspension_clarification === "ALL_PLAN_BUY_REVIEWED_REPLACEMENT_ONLY")).toBe(true);
+    expect(calls.some(c => c.url.endsWith("plan-review-confirmations"))).toBe(false);
+    expect(calls.some(c => c.url.endsWith("plan-activations"))).toBe(false);
+  });
+  it("clears guard selections on source changes and ignores a late full-page response", async () => {
+    const delayed = deferred<Response>();
+    const { wrapper, work } = harness({ configure: pbsRecords, intercept: c => c.url.includes("source-coverage?") && c.url.includes("limit=100") ? delayed.promise : undefined });
+    await loaded(wrapper);
+    const reading = work.loadBuySuspensionObligations(); await flushPromises();
+    work.editSource("Different exact source"); delayed.resolve(response({})); await reading;
+    expect(work.buySuspensionObligations.value).toEqual([]);
+    expect(work.error.value).toBe(""); expect(work.source.value).toBe("Different exact source");
+  });
+  it("keeps source-only guard meaning from becoming a review checkbox grant", async () => {
+    const { wrapper, work } = harness({ configure: r => { pbsRecords(r); const v = r.get(id(1))!; v.sourceCoverage = summary(v, "BLOCKED"); }, state: "BLOCKED" }); await loaded(wrapper);
+    const review = wrapper.findComponent(PlanSourceReview);
+    expect(review.text()).toContain("禁买澄清与接替登记");
+    expect(review.text()).toContain("其他原文义务仍须解决");
+    expect(button(wrapper, "确认当前完整审核").attributes("disabled")).toBeDefined();
+    await review.get('[data-pbs="reason"]').setValue("Unsubmitted explanation must disappear on source owner change");
+    work.editSource("Different current source"); await flushPromises();
+    expect(review.get<HTMLTextAreaElement>('[data-pbs="reason"]').element.value).toBe("");
+  });
+  it("registers the exact Unicode replacement span but never reviews or activates implicitly", async () => {
+    const statement = "本新计划明确接替前序计划的持续禁买义务，并采用新保护条件。";
+    const text = `😀新策略\n${statement}\nstrategy_effective_from=2026-11-15T09:30:00+08:00`;
+    let intent: unknown; let expectedVersion!: PlanVersionView;
+    const { wrapper, work, calls } = harness({ configure: r => {
+      pbsRecords(r); const v = r.get(id(1))!;
+      v.sourceText = text; v.sourceHash = hash(text); v.dailyMapping = mapping(text); v.sourceCoverage = summary(v); expectedVersion = v;
+    }, intercept: c => {
+      if (c.url.includes("source-coverage?") && c.url.includes("limit=100")) {
+        const v = expectedVersion;
+        const result = page(v); result.limit = 100; result.items = [result.items[0]!, { ...result.items[0]!, rowIndex: 1 }];
+        result.returnedCount = 2; result.nextCursor = null;
+        return response(result);
+      }
+      if (c.url.endsWith("plan-review-supplements")) { intent = c.body.buySuspensionReplacementIntent; return response({ revision: 1 }); }
+      if (c.url.endsWith("plan-review-previews")) return response({ candidateJson: c.body.candidateJson, supplementRevision: intent ? 1 : 0,
+        buySuspensionReplacementIntent: intent, review: { content_hash: CONTENT, source_hash: hash(text), evidence_hash: REVIEW, mapping: c.body.mapping, issues: [] } });
+    } });
+    await loaded(wrapper); await work.loadBuySuspensionObligations();
+    // This fixture's source summary must bind the actual Schema10 plan hash.
+    expect(work.error.value).toBe("");
+    const form = wrapper.findComponent(PlanSourceReview);
+    await form.get('[data-pbs="reason"]').setValue("Explicit source proposal for this exact new strategy and reviewed activation");
+    await form.get('[data-pbs="excerpt"]').setValue(statement);
+    await form.get('[data-pbs="start"]').setValue("2026-11-15T09:30:00+08:00");
+    await button(wrapper, "独立登记新原文接替意图").trigger("click");
+    await form.findAll("form").at(-1)!.trigger("submit"); await flushPromises();
+    expect(work.error.value).toBe("");
+    expect(intent).toMatchObject({ source_hash: hash(text), candidate_content_hash: CONTENT, source_start: 5,
+      source_end: 5 + Array.from(statement).length, excerpt: statement, authority_granted: false,
+      strategy_effective_from: "2026-11-15T09:30:00+08:00" });
+    expect(calls.some(c => c.url.endsWith("plan-review-confirmations") || c.url.endsWith("plan-activations"))).toBe(false);
+    expect(work.preview.value?.buySuspensionReplacementIntent).toEqual(intent);
+  });
+
+});
+
+it("shows the server-read predecessor definition and unresolved interval in replacement review", () => {
+  const wrapper = mount(PlanSourceReview, { props: { preview: null, saved: native(), mapping: mapping(), values: { schema_version: 10 }, busy: false,
+    predecessorGuard: { ownerPlanVersionId: id(7), ownerHash: CONTENT, birthActivationRevision: 1, state: null, stateRevision: null,
+      definition: { condition: { type: "MINUTE_CLOSE_BELOW", timeframe_minutes: 5, price_fen: 2420 }, effective_from: "2026-09-30T09:30:00+08:00" },
+      target: "2026-11-15T10:00:00+08:00", outcome: "UNVERIFIED", maintenance: { axis: "DATA_EVALUATION", state: "UNKNOWN" }, blocker: "HISTORY_PENDING" } } });
+  wrappers.push(wrapper);
+  expect(wrapper.text()).toContain("前序保护：完整5分钟收盘严格低于 24.20 元");
+  expect(wrapper.text()).toContain("实际未核实区间：2026-09-30 09:30:00+08:00 至 2026-11-15 10:00:00+08:00");
+  expect(wrapper.get('[data-pbs="acknowledge"]').attributes("disabled")).toBeUndefined();
+});

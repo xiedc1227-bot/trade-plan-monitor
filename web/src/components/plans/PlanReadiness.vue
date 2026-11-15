@@ -8,7 +8,16 @@ const props = defineProps<{ context: ReadinessContext | null; locations: Readonl
 const emit = defineEmits<{ revealField: [path: string]; revealSource: [] }>();
 const { phase, assessment, error, refresh } = usePlanReadiness(() => props.context);
 const titleId = useId();
+const guard = computed(() => assessment.value?.snapshot.buySuspension);
+const price = (fen: number | null | undefined) => fen == null ? "未定义" : (fen / 100).toFixed(2);
 const labels: Readonly<Record<string, string>> = {
+  BUY_SUSPENDED: "买入已被保护条件阻断", BUY_SUSPENSION_LATCHED: "已触发持续禁买",
+  STRATEGY_START_NOT_REACHED: "尚未到新策略起点", UNVERIFIED: "未核实，买入继续阻断",
+  LATCHED: "本计划禁止全部后续买入", CLEAR_THROUGH_TARGET: "本保护已核查至当前截止点；仍需满足其他买入条件",
+  HISTORY_PENDING: "历史区间等待核查", START_NOT_REACHED: "尚未到保护核查起点", MINUTE_GAP: "分钟历史有缺口",
+  CALENDAR_UNVERIFIED: "交易日历尚未核实", PRICE_BASIS_UNVERIFIED: "价格基准尚未核实", SOURCE_UNVERIFIED: "数据来源尚未核实",
+  PROOF_INVALIDATED: "旧核查依据已失效，等待重新核查", GENERATION_CHANGED: "重启后等待重新核查",
+  BATCH_BUDGET_EXHAUSTED: "本批核查已结束，历史区间尚未完成", OWNER_CONTEXT_UNVERIFIED: "原保护归属尚未核实",
   READY_FOR_MONITORING: "监控已就绪", WAITING_EXPECTED_CONFIRMATION: "正常等待官方确认", WAITING_REQUIRED_SERVICE: "等待所需服务",
   NEEDS_REVIEW: "需要核对来源与审核", BLOCKED: "存在阻断", UNKNOWN: "尚未确定", PASS: "通过", WAIT: "等待",
   NOT_APPLICABLE: "不适用", CONDITION_TRUE: "条件已成立", CONDITION_FALSE: "条件未成立（已完成检查）",
@@ -91,6 +100,35 @@ function locate(path: string | undefined) { if (path) emit("revealField", path);
         <p v-if="axis.observation">{{ observationText(axis.observation) }}</p>
         <p v-if="nextStep(axis.reason)">下一步：{{ nextStep(axis.reason) }}</p>
       </li></ul>
+      <section v-if="guard" class="plan-readiness__guard" aria-label="持续禁买保护">
+        <h3>本计划持续禁买保护</h3>
+        <p role="status">{{ guard.outcome ? label(guard.outcome) : '未设置新保护：请核对明确废止依据、实际启用版本与策略起点' }}</p>
+        <p>保护核查健康：{{ label(guard.maintenance.state) }}。监控健康与买入资格分别判断，SELL与独立风险继续核对各自条件。</p>
+        <p v-if="guard.definition">触发口径：完整5分钟收盘价严格低于 {{ price(guard.definition.condition?.price_fen) }} 元；等于或仅盘中最低价跌破不触发。</p>
+        <p v-if="guard.definition">核查起点：{{ when(guard.definition.effective_from) }}</p>
+        <p>连续核查截至：{{ when(guard.state?.coverage?.through) }} · 当前应核查目标：{{ when(guard.target) }}</p>
+        <p v-if="guard.outcome === 'UNVERIFIED'">尚未证明完整区间无跌破，也不表示已经发生跌破。</p>
+        <p v-if="guard.blocker">当前原因：{{ label(guard.blocker) }}</p>
+        <template v-if="guard.state?.trigger">
+          <p>历史触发K线结束：{{ when(guard.state.trigger.bar_end) }} · 触发收盘价：{{ price(guard.state.trigger.close_fen) }} 元</p>
+          <p>实际观察时间：{{ when(guard.state.trigger.observed_at) }} · 价格基准交易日：{{ guard.state.trigger.basis.trade_date }} · 可比基准日：{{ guard.state.trigger.basis.anchor_date }}</p>
+          <details><summary>触发数据来源与价格基准</summary>
+            <p>来源证据：{{ guard.state.trigger.source_hash }}</p>
+            <p>交易日因子：{{ guard.state.trigger.basis.trade_date_factor }} · 基准日因子：{{ guard.state.trigger.basis.anchor_factor }} · 核验时间：{{ when(guard.state.trigger.basis.verified_at) }}</p>
+          </details>
+          <p>价格回升、跨日、重启或普通更新不解除此禁买；历史触发保留。</p>
+        </template>
+        <p v-if="guard.ownerPlanVersionId">原保护版本：{{ guard.ownerPlanVersionId }} · 已保存状态修订：{{ guard.stateRevision ?? '尚无记录，未核实' }}</p>
+        <p v-if="guard.strategyEffectiveFrom">新策略起点：{{ when(guard.strategyEffectiveFrom) }}；起点之前仍不允许买入。</p>
+        <template v-if="guard.replacement">
+          <p>已审核接替版本：{{ guard.replacement.new_plan_version_id }}（v{{ guard.replacement.new_plan_version }}） · 前序版本：{{ guard.replacement.predecessor_plan_version_id }}</p>
+          <p>接替理由：{{ guard.replacement.intent.replacement_reason }} · 新策略起点：{{ when(guard.replacement.intent.strategy_effective_from) }}</p>
+          <p>前序未核实区间：{{ when(guard.replacement.predecessor_unresolved_from) }} 至 {{ when(guard.replacement.predecessor_unresolved_through) }}；接替不改写旧历史结论。</p>
+          <p>新原文依据：{{ guard.replacement.new_source_hash }}</p>
+        </template>
+        <p>恢复须由新原文明示接替，在现有来源补充入口登记，独立审核后另行启用确切版本。保存或审核不会替换当前启用计划；审核本身不证明新底部形成。</p>
+        <button class="plan-readiness__button" type="button" @click="emit('revealSource')">查看原文核对与接替要求</button>
+      </section>
       <ol class="plan-readiness__rules" aria-label="逐规则监控结果"><li v-for="row in rows" :key="row.key">
         <h3>{{ label(row.facts.ownerKind) }} · {{ row.facts.ownerId }}</h3>
         <p>{{ label(row.state) }}<span v-if="row.reason"> · {{ label(row.reason) }}</span></p>

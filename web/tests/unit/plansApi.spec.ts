@@ -454,3 +454,38 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
   });
 }
+
+
+describe("PBS saved version boundary", () => {
+  function current() {
+    return { ...dailyVersion, planJson: JSON.stringify({ ...JSON.parse(dailyVersion.planJson), schema_version: 10,
+      execution_mode: "CONDITION_PLAN", execution_version: "condition-plan-v6",
+      buy_suspension: { condition: { type: "MINUTE_CLOSE_BELOW", timeframe_minutes: 5, price_fen: 2420 },
+        effective_from: "2026-09-30T09:30:00+08:00" } }) };
+  }
+  it("reads and saves a Schema10 draft without granting review or losing canonical JSON", async () => {
+    const detail = current();
+    const api = createPlanApi(vi.fn(async () => jsonResponse(detail)) as typeof fetch);
+    await expect(api.getPlanVersion(detail.id)).resolves.toEqual(detail);
+    await expect(api.savePlanDraft({ planJson: detail.planJson, sourceText: detail.sourceText,
+      dailyMapping: detail.dailyMapping!, expectedRevision: 0 }, "pbs-save")).resolves.toEqual(detail);
+  });
+  it.each(["version", "identity", "mapping", "source", "review"])("rejects malformed Schema10 %s evidence", async mutation => {
+    const detail = { ...current(), canActivate: true };
+    if (mutation === "version") detail.planJson = detail.planJson.replace("condition-plan-v6", "condition-plan-v1");
+    if (mutation === "identity") detail.planId = "copied-id";
+    if (mutation === "mapping") detail.dailyMapping = null;
+    if (mutation === "source") detail.sourceHash = null;
+    if (mutation === "review") detail.reviewId = null;
+    const api = createPlanApi(vi.fn(async () => jsonResponse(detail)) as typeof fetch);
+    await expect(api.getPlanVersion(detail.id)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+});
+
+it.each([9, "10"])("rejects a mismatched current header without sourceCoverage (%s)", async schema_version => {
+  const document = JSON.parse(dailyVersion.planJson);
+  const detail = { ...dailyVersion, canActivate: true, reviewId: null, sourceCoverage: null,
+    planJson: JSON.stringify({ ...document, schema_version, execution_mode: "CONDITION_PLAN", execution_version: "condition-plan-v6" }) };
+  await expect(createPlanApi(vi.fn(async () => jsonResponse(detail)) as typeof fetch).getPlanVersion(detail.id))
+    .rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+});

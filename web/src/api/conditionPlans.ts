@@ -9,6 +9,7 @@ import { validCapitalResponse } from "./p3Capital";
 export interface PlanEditorContract {
   candidateSchema: Schema;
   linkedCandidateSchema?: Schema;
+  buySuspensionCandidateSchema?: Schema;
   linkedPolicyDefinitions?: Record<string, string>;
   pretradeCandidateSchema?: Schema;
   capitalCandidateSchema?: Schema;
@@ -25,7 +26,8 @@ export function isConditionPlanJson(value: string): boolean {
        document.schema_version === 6 && document.execution_version === "condition-plan-v2" ||
        document.schema_version === 7 && document.execution_version === "condition-plan-v3" ||
        document.schema_version === 8 && document.execution_version === "condition-plan-v4" ||
-       document.schema_version === 9 && document.execution_version === "condition-plan-v5");
+       document.schema_version === 9 && document.execution_version === "condition-plan-v5" ||
+       document.schema_version === 10 && document.execution_version === "condition-plan-v6");
   } catch { return false; }
 }
 

@@ -1,11 +1,13 @@
-import { computed, onBeforeUnmount, shallowRef } from "vue";
+import { computed, onBeforeUnmount, shallowRef, watch } from "vue";
 import type { ActivePlanView, ConfiguredAIRuntimeView, DailyMapping, DailyReviewPreview, DailySupplement,
   PlanExtractionCommand, PlanVersionView, PlanVersionSummary, DailyReviewPreviewCommand, DailySupplementCommand,
-  PlanReviewConfirmationCommand } from "../api/generated";
+  PlanReviewConfirmationCommand, SourceObligationView, BuySuspensionReplacementIntent } from "../api/generated";
 import { createConditionPlanApi, isConditionPlanJson } from "../api/conditionPlans";
 import { createAIPlanApi } from "../api/ai";
 import { resolveApiFetch } from "../api/context";
 import { createPlanApi } from "../api/plans";
+import { createPlanReadinessApi } from "../api/planReadiness";
+import type { ReadinessBuySuspension } from "../api/generated-runtime-status";
 import { ApiClientError } from "../api/transport";
 import { usePlanDrafting } from "./usePlanDrafting";
 import { usePlanWorkspaceOwner, type WorkspaceOperation } from "./usePlanWorkspaceOwner";
@@ -70,19 +72,26 @@ export function usePlanWorkspace() {
   const provider = shallowRef<ConfiguredAIRuntimeView | null>(null);
   const fixedSchema = shallowRef<Schema>({});
   const linkedSchema = shallowRef<Schema>({});
+  const buySuspensionSchema = shallowRef<Schema>({});
   const pretradeSchema = shallowRef<Schema>({});
   const capitalSchema = shallowRef<Schema>({});
   const exceptionSchema = shallowRef<Schema>({});
   const exceptionDefinitions = shallowRef<Record<string, string>>({});
   const linkedDefinitions = shallowRef<Record<string, string>>({});
   const schema = computed(() => candidate.value !== null && typeof candidate.value === "object" &&
-    !Array.isArray(candidate.value) ? candidate.value.schema_version === 9 ? capitalSchema.value : candidate.value.schema_version === 8 ? pretradeSchema.value : candidate.value.schema_version === 7 ? exceptionSchema.value :
+    !Array.isArray(candidate.value) ? candidate.value.schema_version === 10 ? buySuspensionSchema.value : candidate.value.schema_version === 9 ? capitalSchema.value : candidate.value.schema_version === 8 ? pretradeSchema.value : candidate.value.schema_version === 7 ? exceptionSchema.value :
       candidate.value.schema_version === 6 ? linkedSchema.value : fixedSchema.value : fixedSchema.value);
   const mapping = shallowRef<DailyMapping | null>(null);
   const preview = shallowRef<DailyReviewPreview | null>(null);
   const saved = shallowRef<PlanVersionView | null>(null);
   const baseVersion = shallowRef<PlanVersionView | null>(null);
   const activated = shallowRef<ActivePlanView | null>(null);
+  const buySuspensionObligations = shallowRef<SourceObligationView[]>([]);
+  const buySuspensionPredecessor = shallowRef<ReadinessBuySuspension | null>(null);
+  let suspensionBinding = "";
+  watch(() => [owner.generation.value, candidate.value, source.value], () => {
+    buySuspensionObligations.value = []; buySuspensionPredecessor.value = null; suspensionBinding = "";
+  }, { flush: "sync" });
   const busy = owner.busy;
   const error = shallowRef("");
   const notice = shallowRef("");
@@ -198,6 +207,7 @@ export function usePlanWorkspace() {
       if (!owner.current(operation)) return;
       fixedSchema.value = contract.candidateSchema;
       linkedSchema.value = contract.linkedCandidateSchema ?? {};
+      buySuspensionSchema.value = contract.buySuspensionCandidateSchema ?? {};
       linkedDefinitions.value = contract.linkedPolicyDefinitions ?? {};
       pretradeSchema.value = contract.pretradeCandidateSchema ?? {};
       capitalSchema.value = contract.capitalCandidateSchema ?? {};
@@ -327,7 +337,9 @@ export function usePlanWorkspace() {
       const replacementPaths = new Set(additions.map(s => s.path));
       const supplements = [...current.review.mapping.supplements.filter(s => !replacementPaths.has(s.path)), ...additions];
       const command: DailySupplementCommand = { candidateJson: current.candidateJson, contentHash: current.review.content_hash,
-        expectedRevision: current.supplementRevision, supplements };
+        expectedRevision: current.supplementRevision, supplements,
+        ...(current.buySuspensionReplacementIntent || supplements.some(s => s.source_hash) ? { sourceText: initial.sourceText } : {}),
+        ...(current.buySuspensionReplacementIntent ? { buySuspensionReplacementIntent: current.buySuspensionReplacementIntent } : {}) };
       if (additions.length) await request("/api/v1/plan-review-supplements", command);
       if (!owner.current(operation)) return;
       const clauses = current.review.mapping.clauses.map(c => {
@@ -341,6 +353,101 @@ export function usePlanWorkspace() {
       if (!owner.current(operation)) return;
       applyPreview(checked);
       notice.value = "人工补充已独立登记，请保存候选并查看服务端审核结果。";
+    });
+  }
+  function savedSuspensionContext() {
+    const version = saved.value;
+    if (!version || dirty.value || historyOnly.value || source.value !== version.sourceText ||
+        !sameJson(candidate.value, JSON.parse(version.planJson)) ||
+        !sameJson(mapping.value, version.dailyMapping) || !version.contentHash || !version.sourceHash ||
+        !candidate.value || typeof candidate.value !== "object" || Array.isArray(candidate.value) || candidate.value.schema_version !== 10) {
+      throw new Error("请先保存当前Schema10参数与原文，再读取并登记禁买依据。");
+    }
+    return version;
+  }
+  const suspensionKey = (v: PlanVersionView) => JSON.stringify([v.id, v.contentHash, v.sourceHash, v.planHash, owner.generation.value]);
+  async function loadBuySuspensionObligations() {
+    await action(async operation => {
+      const version = savedSuspensionContext(), key = suspensionKey(version);
+      buySuspensionObligations.value = []; buySuspensionPredecessor.value = null; suspensionBinding = "";
+      const obligations: SourceObligationView[] = [];
+      let cursor: string | undefined, binding = "", count = 0;
+      const cursors = new Set<string>();
+      do {
+        const page = await reads.getSourceCoverage(version.id, { limit: 100, ...(cursor ? { cursor } : {}) }, { signal: controller.signal });
+        if (!owner.current(operation)) return;
+        const summary = page.summary, actualBinding = summaryBinding(summary);
+        if (summary.sourceHash !== version.sourceHash || summary.contentHash !== version.contentHash ||
+            summary.candidatePlanHash !== version.planHash || binding && binding !== actualBinding ||
+            page.items[0]?.rowIndex !== count || count + page.returnedCount > page.totalRows) {
+          throw new Error("来源覆盖已变化，请重新打开保存版本并读取全部依据。");
+        }
+        binding = actualBinding; count += page.returnedCount;
+        for (const row of page.items) if (row.kind === "OBLIGATION" && row.obligation.semanticsJson) {
+          if (JSON.parse(row.obligation.semanticsJson).treatment === "PERSISTENT_BUY_SUSPENSION") obligations.push(row.obligation);
+        }
+        cursor = page.nextCursor ?? undefined;
+        if (cursor && cursors.has(cursor)) throw new Error("来源分页未推进，不能登记澄清。");
+        if (cursor) cursors.add(cursor);
+      } while (cursor && count <= 14288);
+      if (cursor || key !== suspensionKey(savedSuspensionContext())) throw new Error("来源依据未完整读取。");
+      const active = await reads.getPlanActivationState(version.symbol);
+      if (!owner.current(operation)) return;
+      activated.value = active;
+      if (active.active && active.planVersionId && active.planVersionId !== version.id) {
+        const prior = await createPlanReadinessApi(fetcher).get(active.planVersionId, controller.signal);
+        if (!owner.current(operation)) return;
+        buySuspensionPredecessor.value = prior.snapshot.buySuspension ?? null;
+      }
+      buySuspensionObligations.value = obligations; suspensionBinding = key;
+      notice.value = "已读取完整原文义务及当前启用状态；登记不代表审核或启用。";
+    });
+  }
+  async function registerSuspension(operation: WorkspaceOperation, additions: DailySupplement[], intent?: BuySuspensionReplacementIntent) {
+    const version = savedSuspensionContext(), initial = snapshot();
+    const current = await previewSnapshot({ candidateJson: initial.candidateJson, sourceText: initial.sourceText, mapping: initial.mapping });
+    if (!owner.current(operation)) return;
+    if (current.review.content_hash !== version.contentHash || current.review.source_hash !== version.sourceHash) throw new Error("当前来源或参数已变化，请重新保存。");
+    const paths = new Set(additions.map(s => s.path));
+    const command: DailySupplementCommand = { candidateJson: current.candidateJson, contentHash: current.review.content_hash,
+      sourceText: initial.sourceText, expectedRevision: current.supplementRevision,
+      supplements: [...current.review.mapping.supplements.filter(s => !paths.has(s.path)), ...additions],
+      ...(intent ? { buySuspensionReplacementIntent: intent } : current.buySuspensionReplacementIntent ? { buySuspensionReplacementIntent: current.buySuspensionReplacementIntent } : {}) };
+    await request("/api/v1/plan-review-supplements", command);
+    if (!owner.current(operation)) return;
+    const checked = await previewSnapshot({ candidateJson: current.candidateJson, sourceText: initial.sourceText, mapping: current.review.mapping });
+    if (!owner.current(operation)) return;
+    applyPreview(checked); dirty.value = true;
+    notice.value = "禁买依据已独立登记；请保存新版本，解决其他原文义务，再独立审核并明确启用。";
+  }
+  async function registerBuySuspensionClarification(obligationId: string, reason: string) {
+    await action(async operation => {
+      const version = savedSuspensionContext();
+      const obligation = buySuspensionObligations.value.find(o => o.obligationId === obligationId && o.sourceHash === version.sourceHash);
+      if (!obligation || suspensionBinding !== suspensionKey(version) || reason.trim().length < 20) throw new Error("请读取全部来源义务，选择本原文的禁买义务并填写具体澄清理由。");
+      const paths = ["buy_suspension.condition.type", "buy_suspension.condition.timeframe_minutes", "buy_suspension.condition.price_fen", "buy_suspension.effective_from"];
+      if (paths.some(path => values.value[path] == null)) throw new Error("保护条件缺少明确参数或核查起点，请先补全并保存；确认不能代替缺失定义。");
+      const additions: DailySupplement[] = paths.map(path => ({ supplement_id: `human-${crypto.randomUUID()}`,
+        candidate_content_hash: version.contentHash!, path, value: values.value[path]!, reason: reason.trim(),
+        source_hash: version.sourceHash!, obligation_id: obligation.obligationId,
+        buy_suspension_clarification: "ALL_PLAN_BUY_REVIEWED_REPLACEMENT_ONLY" }));
+      await registerSuspension(operation, additions);
+    });
+  }
+  async function registerBuySuspensionReplacement(input: { excerpt: string; reason: string; strategyStart: string; retire: boolean; acknowledge: boolean }) {
+    const submitted = copy(input);
+    await action(async operation => {
+      const version = savedSuspensionContext(), text = source.value, offset = text.indexOf(submitted.excerpt);
+      if (suspensionBinding !== suspensionKey(version) || !submitted.excerpt || offset < 0 || text.indexOf(submitted.excerpt, offset + 1) >= 0 ||
+          submitted.reason.trim().length < 20 || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+08:00$/.test(submitted.strategyStart) || !Number.isFinite(Date.parse(submitted.strategyStart))) {
+        throw new Error("请先读取当前依据，填写唯一、完整的新原文接替声明、具体理由及明确+08:00策略起点。");
+      }
+      if (submitted.acknowledge && buySuspensionPredecessor.value?.outcome !== "UNVERIFIED") throw new Error("尚无可核对的前序未核实区间，不能声明已经确认该区间。");
+      const start = Array.from(text.slice(0, offset)).length;
+      await registerSuspension(operation, [], { source_hash: version.sourceHash!, candidate_content_hash: version.contentHash!,
+        source_start: start, source_end: start + Array.from(submitted.excerpt).length, excerpt: submitted.excerpt,
+        replacement_reason: submitted.reason.trim(), retire_predecessor_guard: submitted.retire,
+        acknowledge_unverified_predecessor: submitted.acknowledge, strategy_effective_from: submitted.strategyStart, authority_granted: false });
     });
   }
   async function save() {
@@ -359,7 +466,7 @@ export function usePlanWorkspace() {
         dailyMapping: body.mapping, expectedRevision: state.revision, extractionId: body.extractionId, basePlanVersionId: base?.id ?? null });
       if (!owner.current(operation)) return;
       candidate.value = JSON.parse(result.planJson) as Json;
-      saved.value = result; baseVersion.value = result;
+      saved.value = result; baseVersion.value = result; activated.value = state;
       dirty.value = false;
       await refreshVersions(operation);
       if (owner.current(operation)) notice.value = "候选已保存。审核与启用是两次独立操作。";
@@ -431,5 +538,6 @@ export function usePlanWorkspace() {
   }
   return { extraction, retryExtraction, stopWaiting, versions, providers, historyOnly, dirty, extractionStatus, openVersion, candidate, source, provider, schema, definitions, mapping, preview, saved, activated, busy, error, notice,
     ownerGeneration: owner.generation, sourceCoverage, canConfirmSourceReview, refreshSourceCoverage,
+    buySuspensionObligations, buySuspensionPredecessor, loadBuySuspensionObligations, registerBuySuspensionClarification, registerBuySuspensionReplacement,
     values, request, action, load, extract, edit, editSource, refreshPreview, exclude, supplement, save, confirm, activate, deactivate };
 }

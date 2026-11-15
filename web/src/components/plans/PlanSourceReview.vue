@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue";
-import type { DailyMapping, DailyReviewPreview, PlanVersionView } from "../../api/generated";
+import type { DailyMapping, DailyReviewPreview, PlanVersionView, SourceObligationView } from "../../api/generated";
+import type { ReadinessBuySuspension } from "../../api/generated-runtime-status";
 import { fieldLabels, type Json } from "./planSchema";
 const props = defineProps<{ preview: DailyReviewPreview | null; saved: PlanVersionView | null;
   mapping: DailyMapping | null; values: Record<string, Json>; busy: boolean; activeVersionId?: string | null;
-  canConfirmReview?: boolean; sourceOwnerKey?: string | number }>();
+  canConfirmReview?: boolean; sourceOwnerKey?: string | number;
+  guardObligations?: readonly SourceObligationView[]; predecessorGuard?: ReadinessBuySuspension | null }>();
 const emit = defineEmits<{ supplement: [items: { path: string; reason: string }[], clauses: { id: string; reason: string; paths: string[] }[]];
   exclude: [clauseId: string, text: string];
+  loadGuardObligations: []; registerGuard: [obligationId: string, reason: string];
+  registerReplacement: [input: { excerpt: string; reason: string; strategyStart: string; retire: boolean; acknowledge: boolean }];
   save: []; confirm: []; activate: []; deactivate: [] }>();
+const guardForm = reactive({ obligationId: "", reason: "", excerpt: "", strategyStart: "", retire: false, acknowledge: false });
+const isSuspension = computed(() => props.values.schema_version === 10);
+const registeredIntent = computed(() => props.preview?.buySuspensionReplacementIntent);
+const when = (value: string | null | undefined) => value?.replace("T", " ") ?? "尚未确定";
 const reasons = reactive<Record<string, string>>({});
 const clauseReasons = reactive<Record<string, string>>({});
 const clausePaths = reactive<Record<string, string>>({});
@@ -17,6 +25,7 @@ const issues = computed(() => props.saved?.dailyIssues ?? props.preview?.review.
 const evidenceMapping = computed(() => props.preview?.review.mapping ?? props.mapping);
 watch(() => [evidenceMapping.value?.candidate_content_hash, props.sourceOwnerKey], (current, previous) => {
   if (current[0] === previous[0] && current[1] === previous[1]) return;
+  Object.assign(guardForm, { obligationId: "", reason: "", excerpt: "", strategyStart: "", retire: false, acknowledge: false });
   for (const entries of [reasons, clauseReasons, clausePaths, exclusionTexts]) {
     for (const key of Object.keys(entries)) delete entries[key];
   }
@@ -69,6 +78,40 @@ const canConfirm = computed(() => props.canConfirmReview === true && props.saved
       <p v-if="preview">已登记人工补充 {{ evidenceMapping.supplements.length }} 项，可分批填写其余定义。</p>
       <button v-if="preview" type="button" :disabled="busy || (!pendingItems.length && !reviewedClauses.length)" @click="register">单独登记上述人工补充</button>
     </div>
+    <section v-if="isSuspension" class="daily-review__source" aria-label="禁买澄清与接替登记">
+      <h3>禁买澄清与接替登记</h3>
+      <p>仅登记当前原文和参数的明确人工决定；其他原文义务仍须解决。保存、独立审核、明确启用是三次操作，登记不会解除当前禁买。</p>
+      <p v-if="values['buy_suspension.condition.price_fen'] != null">本候选口径：完整5分钟收盘严格低于 {{ (Number(values['buy_suspension.condition.price_fen']) / 100).toFixed(2) }} 元；起点 {{ when(String(values['buy_suspension.effective_from'] ?? '')) }}。本计划全部后续BUY受限，仅确切已审核接替版本启用后改变新上下文。</p>
+      <p v-else>当前候选未定义保护条件；原文若有此义务仍会阻断。只有新原文明示废止并完成接替审核，才可不保留旧保护。</p>
+      <button type="button" :disabled="busy || !saved" @click="emit('loadGuardObligations')">读取本原文全部禁买义务与当前启用依据</button>
+      <p>尚未保存时请先保存当前参数。完整分页读取后，才可选择服务端识别的真实义务；不会从勾选推定来源。</p>
+      <template v-if="predecessorGuard">
+        <p>当前启用计划的原保护版本：{{ predecessorGuard.ownerPlanVersionId ?? '尚未核实' }} · 状态：{{ predecessorGuard.outcome === 'LATCHED' ? '持续禁买已触发' : predecessorGuard.outcome === 'UNVERIFIED' ? '尚未核实，BUY阻断' : '仅本保护已核查' }}</p>
+        <p v-if="predecessorGuard.definition">前序保护：完整5分钟收盘严格低于 {{ predecessorGuard.definition.condition ? (predecessorGuard.definition.condition.price_fen / 100).toFixed(2) : '尚未定义' }} 元 · 状态修订：{{ predecessorGuard.stateRevision ?? '尚无记录，未核实' }}。</p>
+        <p>前序核查起点：{{ when(predecessorGuard.definition?.effective_from) }}；连续核查截至 {{ when(predecessorGuard.state?.coverage?.through) }}；当前目标 {{ when(predecessorGuard.target) }}。</p>
+        <p v-if="predecessorGuard.outcome === 'UNVERIFIED'">须明确接受的实际未核实区间：{{ when(predecessorGuard.state?.coverage?.through ?? predecessorGuard.definition?.effective_from) }} 至 {{ when(predecessorGuard.target) }}；历史仍保留未核实。</p>
+      </template>
+      <form @submit.prevent="emit('registerGuard', guardForm.obligationId, guardForm.reason)">
+        <label>本原文的持续禁买义务
+          <select v-model="guardForm.obligationId" :disabled="busy" data-pbs="obligation">
+            <option value="">请先完整读取，再选择原句</option>
+            <option v-for="obligation in guardObligations ?? []" :key="obligation.obligationId" :value="obligation.obligationId">{{ obligation.excerpt }}</option>
+          </select>
+        </label>
+        <label>本次明确澄清理由（至少20字）<textarea v-model="guardForm.reason" data-pbs="reason" rows="2" /></label>
+        <button type="submit" :disabled="busy || !saved || !guardForm.obligationId || guardForm.reason.trim().length < 20">独立登记本原文禁买澄清</button>
+      </form>
+      <form @submit.prevent="emit('registerReplacement', { excerpt: guardForm.excerpt, reason: guardForm.reason, strategyStart: guardForm.strategyStart, retire: guardForm.retire, acknowledge: guardForm.acknowledge })">
+        <h4>登记新原文的接替意图</h4>
+        <p>新原文必须包含新BUY指令、完整接替声明和明确策略起点。前序身份及实际状态由服务端核验，不能自行选择。理由使用上方填写内容。</p>
+        <label>完整接替声明原句（逐字粘贴，不改原文）<textarea v-model="guardForm.excerpt" data-pbs="excerpt" rows="2" /></label>
+        <label>新策略明确起点（含+08:00时区）<input v-model="guardForm.strategyStart" data-pbs="start" placeholder="YYYY-MM-DDTHH:mm:ss+08:00" /></label>
+        <label><input v-model="guardForm.retire" type="checkbox" data-pbs="retire" />新原文明示废止旧保护（未选则须有新保护定义）</label>
+        <label><input v-model="guardForm.acknowledge" type="checkbox" data-pbs="acknowledge" :disabled="predecessorGuard?.outcome !== 'UNVERIFIED'" />明确接受上方服务端展示的前序未核实区间；不会将旧历史改为已核查</label>
+        <button type="submit" :disabled="busy || !saved || !guardForm.excerpt || !guardForm.strategyStart || guardForm.reason.trim().length < 20">独立登记新原文接替意图</button>
+      </form>
+      <p v-if="registeredIntent">服务端已登记接替意图：{{ registeredIntent.replacement_reason }} · 策略起点 {{ when(registeredIntent.strategy_effective_from) }}。尚须保存新版本、独立审核并明确启用。</p>
+    </section>
     <div aria-live="polite">
       <h3>服务端待确认项（{{ issues.length }}）</h3>
       <ul><li v-for="issue in issues" :key="issue.issue_id">{{ issue.path }}：{{ issue.reason }}</li></ul>
@@ -79,6 +122,8 @@ const canConfirm = computed(() => props.canConfirmReview === true && props.saved
       <button type="button" :disabled="busy || saved?.status !== 'DRAFT' || !saved?.canActivate" @click="emit('activate')">启用当前审核绑定</button>
       <button v-if="saved && activeVersionId === saved.id" type="button" :disabled="busy" @click="emit('deactivate')">停用当前计划</button>
     </div>
+    <p v-if="activeVersionId">当前实际启用版本：{{ activeVersionId }}。<span v-if="saved && activeVersionId !== saved.id">本候选尚未启用；已有审核也不会替换当前计划。</span></p>
+    <p v-else-if="saved">当前没有已启用版本；审核与启用仍需分别完成。</p>
     <p v-if="saved">已保存版本 {{ saved.version }} · {{ saved.reviewId ? '已有审核记录，请查看原文核对状态' : '待审核' }}</p>
     <a v-if="saved" :href="`/plans/${encodeURIComponent(saved.id)}`">打开此版本继续审核（可刷新恢复）</a>
   </section>
@@ -87,6 +132,6 @@ const canConfirm = computed(() => props.canConfirmReview === true && props.saved
 <style scoped>
 .daily-review, .daily-review__source, .daily-review__row { display: grid; gap: var(--space-3); }
 .daily-review__row { min-width: 0; overflow-wrap: anywhere; padding: var(--space-4); border-bottom: var(--border-technical); }
-textarea, input { box-sizing: border-box; max-width: 100%; width: 100%; }
+textarea, select, input:not([type="checkbox"]) { box-sizing: border-box; max-width: 100%; width: 100%; }
 .daily-review__actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 </style>

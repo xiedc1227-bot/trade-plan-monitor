@@ -405,7 +405,11 @@ function isPlanVersion(value: unknown): value is PlanVersionView {
       validationIssues.some((issue) => issue.code === "LEGACY_PLANS_REQUIRE_REVIEW" && issue.activationBlocking);
   }
   if (isRecord(document) && isIntegerWithin(document.schema_version, 1, 4) && !historicalSourceOnly) return false;
-  if (isRecord(document) && (document.schema_version === 4 || document.schema_version === 5 ||
+  if (isRecord(document) && (document.execution_mode === "CONDITION_PLAN" ||
+      typeof document.execution_version === "string" && document.execution_version.startsWith("condition-plan-")) &&
+      (!isIntegerWithin(document.schema_version, 5, 10) || document.execution_mode !== "CONDITION_PLAN" ||
+       document.execution_version !== `condition-plan-v${Number(document.schema_version) - 4}`)) return false;
+  if (isRecord(document) && (document.schema_version === 4 || document.schema_version === 5 || document.schema_version === 10 ||
     source !== null && isIntegerWithin(document.schema_version, 6, 9))) {
     const mode = document.schema_version === 4 ? "DAILY_CLOSE_PLAN" : "CONDITION_PLAN";
     const executionVersion = document.schema_version === 4 ? "daily-close-v1" :

@@ -18,7 +18,7 @@ const axes: readonly AxisReadiness["axis"][] = ["SOURCE_COVERAGE", "REVIEW_ACTIV
   "DATA_EVALUATION", "INVENTORY_CAPITAL", "NOTIFICATION_DELIVERY"];
 const axisStates = ["PASS", "WAIT", "BLOCKED", "UNKNOWN", "NOT_APPLICABLE"];
 const ruleStates: readonly RuleReadiness["state"][] = ["CONDITION_TRUE", "CONDITION_FALSE",
-  "WAITING_OFFICIAL_CONFIRMATION", "AWAITING_FIRST_EVALUATION", "MISSING_INPUT", "BLOCKED", "UNKNOWN"];
+  "WAITING_OFFICIAL_CONFIRMATION", "AWAITING_FIRST_EVALUATION", "MISSING_INPUT", "BLOCKED", "UNKNOWN", "BUY_SUSPENDED"];
 const summaries = ["READY_FOR_MONITORING", "WAITING_EXPECTED_CONFIRMATION", "WAITING_REQUIRED_SERVICE", "NEEDS_REVIEW", "BLOCKED", "UNKNOWN"];
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -93,11 +93,66 @@ function rule(value: unknown): boolean {
   return true;
 }
 
+const positive = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+const factor = (value: unknown) => typeof value === "string" && /^\d+(\.\d+)?$/.test(value) && Number(value) > 0 && Number.isFinite(Number(value));
+function guardDefinition(value: unknown, draft = false): boolean {
+  if (!record(value) || !(draft && value.effective_from === null || instant(value.effective_from))) return false;
+  const c = value.condition;
+  return draft && c === null || record(c) && c.type === "MINUTE_CLOSE_BELOW" && c.timeframe_minutes === 5 && positive(c.price_fen);
+}
+function sameGuardDefinition(left: unknown, right: unknown): boolean {
+  if (!record(left) || !record(right) || !record(left.condition) || !record(right.condition)) return false;
+  return left.effective_from === right.effective_from && left.condition.type === right.condition.type &&
+    left.condition.timeframe_minutes === right.condition.timeframe_minutes && left.condition.price_fen === right.condition.price_fen;
+}
+function suspension(value: unknown): boolean {
+  if (value == null) return true;
+  if (!record(value) || ![null, "UNVERIFIED", "CLEAR_THROUGH_TARGET", "LATCHED"].includes(value.outcome as string | null) ||
+      !(value.definition === null || guardDefinition(value.definition, true)) || !optionalInstant(value.target) ||
+      !optionalInstant(value.strategyEffectiveFrom) || !optionalText(value.blocker) || !axis(value.maintenance) ||
+      (value.maintenance as Record<string, unknown>).axis !== "DATA_EVALUATION" ||
+      !(value.ownerPlanVersionId === null || text(value.ownerPlanVersionId)) || !(value.ownerHash === null || digest(value.ownerHash)) ||
+      !(value.birthActivationRevision === null || positive(value.birthActivationRevision)) ||
+      !(value.skippedRules === undefined || Array.isArray(value.skippedRules) && value.skippedRules.length <= 2 && value.skippedRules.every(text))) return false;
+  const state = value.state;
+  if (state === null) {
+    if (value.stateRevision !== null || ![null, "UNVERIFIED"].includes(value.outcome as null | "UNVERIFIED")) return false;
+  } else {
+    if (!record(state) || !positive(value.stateRevision) || state.version !== "buy-suspension-state-v1" ||
+        state.owner_plan_version_id !== value.ownerPlanVersionId || state.birth_activation_revision !== value.birthActivationRevision ||
+        !guardDefinition(state.definition) || !sameGuardDefinition(state.definition, value.definition) ||
+        !instant(state.target) || !instant(state.evaluated_at) || !digest(state.source_hash) || !digest(state.content_hash)) return false;
+    const c = state.coverage, t = state.trigger;
+    if (c != null && (!record(c) || !instant(c.through) || !digest(c.content_hash) ||
+        !(c.anchor_date === null || date(c.anchor_date)) || !(c.anchor_factor === null || factor(c.anchor_factor)))) return false;
+    if ((t != null) !== (value.outcome === "LATCHED")) return false;
+    if (t != null) {
+      if (!record(t) || !instant(t.bar_end) || !instant(t.observed_at) || !positive(t.close_fen) || !digest(t.source_hash) || !record(t.basis)) return false;
+      const b = t.basis;
+      if (b.source_contract !== "TUSHARE_STK_MINS_241_END_V1" || !date(b.trade_date) || !date(b.anchor_date) ||
+          !factor(b.trade_date_factor) || !factor(b.anchor_factor) || !instant(b.verified_at)) return false;
+    }
+  }
+  const r = value.replacement;
+  if (r != null) {
+    if (!record(r) || r.version !== "buy-suspension-replacement-v1" || r.authority_granted !== false ||
+        !text(r.predecessor_plan_version_id) || !text(r.new_plan_version_id) || !positive(r.new_plan_version) ||
+        !guardDefinition(r.predecessor_guard) || !(r.new_guard === null || guardDefinition(r.new_guard)) ||
+        !optionalInstant(r.predecessor_unresolved_from) || !optionalInstant(r.predecessor_unresolved_through) ||
+        !optionalQuantity(r.predecessor_state_revision) || !digest(r.new_source_hash) || !record(r.intent)) return false;
+    const i = r.intent;
+    if (i.authority_granted !== false || !text(i.replacement_reason) || !text(i.excerpt) || !instant(i.strategy_effective_from) ||
+        typeof i.retire_predecessor_guard !== "boolean" || typeof i.acknowledge_unverified_predecessor !== "boolean") return false;
+  }
+  return true;
+}
+
 /** Guard only this view's consumed wire values; semantic proof remains server-owned. */
 function readable(value: unknown, versionId: string): value is ReadinessAssessment {
   if (!record(value) || value.authorityGranted !== false || value.contractVersion !== "plan-monitor-readiness-v1" ||
       !summaries.includes(String(value.summary)) || !(value.freshUntil === null || instant(value.freshUntil)) || !record(value.snapshot)) return false;
   const snapshot = value.snapshot, context = snapshot.context;
+  if (!suspension(snapshot.buySuspension)) return false;
   if (!record(context) || context.planVersionId !== versionId || !digest(context.contentHash) ||
       !(context.sourceHash === null || digest(context.sourceHash)) ||
       !(context.coverageHash === null || digest(context.coverageHash)) ||

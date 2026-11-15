@@ -35,6 +35,7 @@ export function initialValue(schema: Schema): Json {
   return null;
 }
 export const fieldLabels: Record<string, string> = {
+  buy_suspension: "本计划持续禁买保护",
   limit: "持仓数量与金额限制", capital_policy: "模拟金额上限政策", cap_fen: "金额上限（分）",
   buy_cost_schedule: "买入占用成本估算", account_scope: "适用模拟账户", valuation: "市值估算报价方式",
   pretrade_policy: "买入前数量与费用政策", sizing: "波动数量", economics: "费用与买入门槛", level_evidence: "价格依据维度",
@@ -78,6 +79,7 @@ export const fieldLabels: Record<string, string> = {
   involvesCore: "重评是否涉及CORE", scopeEvidence: "重评范围具体依据",
 };
 export const choiceLabels: Record<string, string> = {
+  BuySuspensionDraftDefinition: "完整5分钟收盘触发持续禁买",
   CAPITAL_ONLY: "仅金额上限", QUANTITY_AND_CAPITAL: "股数与金额同时限制",
   OPEN_COST_CAP: "持仓成本占用上限", MARKET_VALUE_CAP: "持仓市值上限",
   CapitalOnlyLimit: "仅金额上限，不设股数上限", CombinedCapitalLimit: "股数与金额同时限制",

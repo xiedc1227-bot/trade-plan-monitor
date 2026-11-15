@@ -5,7 +5,7 @@ import PlanReadiness from "../../src/components/plans/PlanReadiness.vue";
 import PlanWorkbench from "../../src/components/plans/PlanWorkbench.vue";
 import { apiFetchKey } from "../../src/api/context";
 import { createPlanReadinessApi, type ReadinessContext } from "../../src/api/planReadiness";
-import type { AxisReadiness, ReadinessAssessment, ReadinessObservation, RuleReadiness } from "../../src/api/generated-runtime-status";
+import type { AxisReadiness, ReadinessBuySuspension, ReadinessAssessment, ReadinessObservation, RuleReadiness } from "../../src/api/generated-runtime-status";
 import type { usePlanWorkspace } from "../../src/composables/usePlanWorkspace";
 import type { PlanVersionView, SourceCoverageSummaryView } from "../../src/api/generated";
 
@@ -405,4 +405,77 @@ describe("actual workbench readiness integration", () => {
     expect(wrapper.findComponent(PlanReadiness).text()).toContain("监控已就绪");
     expect(wrapper.findComponent(PlanReadiness).text()).not.toContain("存在阻断");
   });
+});
+
+
+function pbsGuard(latched = false): ReadinessBuySuspension {
+  const definition = { condition: { type: "MINUTE_CLOSE_BELOW" as const, timeframe_minutes: 5 as const, price_fen: 2420 }, effective_from: "2026-09-30T09:30:00+08:00" };
+  return { definition, ownerPlanVersionId: A, ownerHash: HASH, birthActivationRevision: 1,
+    stateRevision: latched ? 2 : null, target: "2026-11-14T10:00:00+08:00", outcome: latched ? "LATCHED" : "UNVERIFIED",
+    blocker: latched ? "BUY_SUSPENSION_LATCHED" : "HISTORY_PENDING", skippedRules: latched ? ["buy-one"] : [],
+    maintenance: { axis: "DATA_EVALUATION", state: "PASS", observation: observation() },
+    state: !latched ? null : { version: "buy-suspension-state-v1", symbol: "601021.SH", owner_plan_version_id: A,
+      content_hash: HASH, source_hash: SOURCE, review_id: A, birth_activation_revision: 1, definition,
+      evaluated_at: "2026-11-14T10:00:00+08:00", target: "2026-11-14T10:00:00+08:00", blocker: null,
+      coverage: { through: "2026-11-14T09:40:00+08:00", content_hash: HASH, anchor_date: "2026-11-14", anchor_factor: "1", generation: A },
+      trigger: { bar_end: "2026-11-14T09:45:00+08:00", close_fen: 2419, source_hash: SOURCE, observed_at: "2026-11-14T09:45:01+08:00",
+        basis: { source_contract: "TUSHARE_STK_MINS_241_END_V1", trade_date: "2026-11-14", anchor_date: "2026-11-14", trade_date_factor: "1", anchor_factor: "1", verified_at: "2026-11-14T09:45:00+08:00" } } } };
+}
+describe("PBS monitoring and BUY presentation", () => {
+  it("shows a healthy latched ban with actual trigger, checked prefix and independent SELL", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(NOW);
+    const value = assessment(); value.snapshot.buySuspension = pbsGuard(true);
+    value.rules[0]!.state = "BUY_SUSPENDED"; value.rules[0]!.reason = "BUY_SUSPENSION_LATCHED";
+    value.rules[0]!.facts.evaluatedAt = null; value.rules[0]!.facts.rootOutcome = null;
+    const sell = rule("CONDITION_TRUE", "sell"); sell.facts.side = "SELL"; value.rules.push(sell);
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response(value));
+    const wrapper = mountReadiness(fetcher); await flushPromises();
+    expect(wrapper.text()).toContain("监控已就绪"); expect(wrapper.text()).toContain("本计划禁止全部后续买入");
+    expect(wrapper.text()).toContain("完整5分钟收盘价严格低于 24.20 元");
+    expect(wrapper.text()).toContain("连续核查截至：2026-11-14 09:40:00+08:00");
+    expect(wrapper.text()).toContain("触发收盘价：24.19 元"); expect(wrapper.text()).toContain("价格基准交易日：2026-11-14");
+    expect(wrapper.text()).toContain("条件已成立");
+    expect(wrapper.text()).not.toContain("实际上次比较：2026-11-14 09:45");
+    expect(wrapper.findAll("button").some(b => /解锁|恢复买入/.test(b.text()))).toBe(false);
+    expect(fetcher.mock.calls.every(([, init]) => init?.method === "GET")).toBe(true);
+  });
+  it("does not turn unverified with PASS maintenance into clear or a price breach", async () => {
+    const value = assessment(); value.summary = "UNKNOWN"; value.freshUntil = null; value.snapshot.buySuspension = pbsGuard();
+    const wrapper = mountReadiness(vi.fn<typeof fetch>().mockResolvedValue(response(value))); await flushPromises();
+    expect(wrapper.text()).toContain("未核实，买入继续阻断"); expect(wrapper.text()).toContain("历史区间等待核查");
+    expect(wrapper.text()).not.toContain("触发收盘价"); expect(wrapper.text()).not.toContain("已核查无跌破");
+  });
+  it.each(["timeframe", "threshold", "revision", "owner", "trigger", "coverage", "basis"])("rejects malformed guard %s", async mutation => {
+    const value = assessment(); const guard = pbsGuard(true); value.snapshot.buySuspension = guard;
+    if (mutation === "timeframe") Object.assign(guard.definition!.condition!, { timeframe_minutes: 1 });
+    if (mutation === "threshold") guard.definition!.condition!.price_fen = Number.NaN;
+    if (mutation === "revision") guard.stateRevision = 0;
+    if (mutation === "owner") guard.state!.owner_plan_version_id = B;
+    if (mutation === "trigger") guard.state!.trigger = null;
+    if (mutation === "coverage") guard.state!.coverage!.through = "not-a-time";
+    if (mutation === "basis") guard.state!.trigger!.basis.anchor_factor = "unknown";
+    await expect(createPlanReadinessApi(vi.fn<typeof fetch>().mockResolvedValue(response(value))).get(A)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+});
+
+it("accepts equivalent native guard definitions regardless of JSON key order", async () => {
+  const value = assessment(), guard = pbsGuard(true); value.snapshot.buySuspension = guard;
+  guard.state!.definition = { effective_from: guard.definition!.effective_from!, condition: {
+    price_fen: 2420, timeframe_minutes: 5, type: "MINUTE_CLOSE_BELOW" } };
+  await expect(createPlanReadinessApi(vi.fn<typeof fetch>().mockResolvedValue(response(value))).get(A)).resolves.toEqual(value);
+});
+it.each(["type", "timeframe_minutes", "price_fen", "effective_from"])("rejects a native definition with different %s", async key => {
+  const value = assessment(), guard = pbsGuard(true); value.snapshot.buySuspension = guard;
+  guard.state!.definition = JSON.parse(JSON.stringify(guard.definition));
+  if (key === "effective_from") guard.state!.definition.effective_from = "2026-09-30T09:35:00+08:00";
+  else Object.assign(guard.state!.definition.condition, { [key]: key === "type" ? "MINUTE_CLOSE_ABOVE" : key === "price_fen" ? 2418 : 1 });
+  await expect(createPlanReadinessApi(vi.fn<typeof fetch>().mockResolvedValue(response(value))).get(A)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+});
+
+it("does not call the predecessor retired merely because a candidate has no new guard", async () => {
+  const value = assessment(); value.summary = "UNKNOWN"; value.freshUntil = null;
+  value.snapshot.buySuspension = { ...pbsGuard(), definition: null, outcome: null, strategyEffectiveFrom: "2026-11-16T09:30:00+08:00" };
+  const wrapper = mountReadiness(vi.fn<typeof fetch>().mockResolvedValue(response(value))); await flushPromises();
+  expect(wrapper.text()).toContain("未设置新保护：请核对明确废止依据、实际启用版本与策略起点");
+  expect(wrapper.text()).not.toContain("旧保护已明确废止");
 });

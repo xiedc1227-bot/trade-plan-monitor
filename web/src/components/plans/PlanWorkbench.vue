@@ -127,6 +127,8 @@ watch(work.ownerGeneration, () => { coverageNotice.value = ""; }, { flush: "sync
     <PlanSourceReview v-if="candidate && !historyOnly" :preview="preview" :saved="saved" :mapping="mapping" :values="values" :busy="busy"
       :can-confirm-review="work.canConfirmSourceReview.value" :source-owner-key="work.ownerGeneration.value"
       :active-version-id="activated?.active ? activated.planVersionId : null"
+      :guard-obligations="work.buySuspensionObligations.value" :predecessor-guard="work.buySuspensionPredecessor.value"
+      @load-guard-obligations="work.loadBuySuspensionObligations" @register-guard="work.registerBuySuspensionClarification" @register-replacement="work.registerBuySuspensionReplacement"
       @supplement="work.supplement" @exclude="work.exclude" @save="work.save" @confirm="work.confirm" @activate="work.activate" @deactivate="work.deactivate" />
     <SourceCoverageReview ref="sourceCoveragePane" :phase="coveragePhase" :page="coveragePage" :safe-error="coverageError"
       :source-text="source" :source-hash="saved?.sourceHash ?? null" :verified-source-hash="coverageVerifiedSourceHash" :busy="busy"
