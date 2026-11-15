@@ -5,7 +5,10 @@ from typing import Literal
 from pydantic import Field, JsonValue
 
 from trade_plan_monitor.ai.daily_review import semantic_values
-from trade_plan_monitor.ai.plan_update_extraction import PlanUpdateExtractionOutput
+from trade_plan_monitor.ai.plan_update_extraction import (
+    BuySuspensionPlanUpdateExtractionOutput,
+    PlanUpdateExtractionOutput,
+)
 from trade_plan_monitor.ai.risk_withdrawal_scope import risk_scope_issue
 from trade_plan_monitor.backtest.models import StableIdentifier
 from trade_plan_monitor.backtest.research_input import ResearchValue
@@ -17,7 +20,10 @@ from trade_plan_monitor.domain.market_linkage_validation import (
 )
 from trade_plan_monitor.domain.risk_scope import risk_identity
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
-from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+from trade_plan_monitor.domain.unified_plan_validation import (
+    BuySuspensionPlanDraft,
+    UnifiedPlanDraft,
+)
 
 COLLECTIONS = ("ordinary_rules", "risk_branches", "alert_rules")
 SECTIONS = (
@@ -50,6 +56,12 @@ class MaterializedPlanUpdate(ResearchValue):
     draft: CurrentPlanDraft
     changes: tuple[PlanChange, ...] = Field(max_length=64)
     origins: tuple[PlanFieldOrigin, ...] = Field(max_length=2000)
+
+
+class BuySuspensionMaterializedPlanUpdate(MaterializedPlanUpdate):
+    """Current-only result; the legacy materialized draft union stays closed."""
+
+    draft: BuySuspensionPlanDraft
 
 
 def _identity(target, rule):
@@ -95,8 +107,16 @@ def materialize_plan_update(
     """Resolve whole sections or stable rules; undeclared draft fields have no effect."""
     if not isinstance(base, UnifiedTradePlan) or not isinstance(output, PlanUpdateExtractionOutput):
         raise TypeError("materialization requires a complete base and typed update")
+    current = type(output) is BuySuspensionPlanUpdateExtractionOutput
+    if current and historical:
+        raise ValueError("BUY_SUSPENSION_FROZEN_UNSUPPORTED")
+    if current != (base.schema_version == 10):
+        raise ValueError("update version differs from predecessor contract")
     base = type(base).model_validate(base.model_dump(mode="python"))
-    output = PlanUpdateExtractionOutput.model_validate(output.model_dump(mode="python"))
+    output_model = (BuySuspensionPlanUpdateExtractionOutput
+                    if current else PlanUpdateExtractionOutput)
+    output = output_model.model_validate(output.model_dump(mode="python"))
+    scalar_sections = (*SECTIONS, "buy_suspension") if current else SECTIONS
     if output.scope == "UNRESOLVED":
         raise ValueError("ambiguous scope blocks dependent materialization")
     if (output.draft.symbol, output.draft.market) != (base.symbol, base.market):
@@ -127,7 +147,7 @@ def materialize_plan_update(
         }
     if output.scope == "FULL_REPLACEMENT":
         draft = output.draft
-        for target in (*SECTIONS, *COLLECTIONS):
+        for target in (*scalar_sections, *COLLECTIONS):
             if target in COLLECTIONS:
                 before, after = _rules(target, prior[target]), _rules(target, proposed[target])
                 for key in dict.fromkeys((*before, *after)):
@@ -146,7 +166,7 @@ def materialize_plan_update(
         )
     else:
         explicit = {(op.target, op.rule_id) for op in output.operations}
-        required = {(key, None) for key in SECTIONS}
+        required = {(key, None) for key in scalar_sections}
         required.update((target, key) for target in COLLECTIONS for key in rule_origins[target])
         if not output.retain_unmentioned and not required <= explicit:
             raise ValueError("unmentioned scope cannot silently retain or remove prior content")
@@ -258,4 +278,5 @@ def materialize_plan_update(
                     origin = PlanFieldOrigin(path=path, origin="BASE", original_path=old_path)
                 preserved.append(origin)
             origins = tuple(preserved)
-    return MaterializedPlanUpdate(draft=draft, changes=tuple(changes), origins=origins)
+    result_model = BuySuspensionMaterializedPlanUpdate if current else MaterializedPlanUpdate
+    return result_model(draft=draft, changes=tuple(changes), origins=origins)

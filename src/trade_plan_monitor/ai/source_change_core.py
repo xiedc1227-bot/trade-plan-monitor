@@ -27,6 +27,7 @@ from trade_plan_monitor.ai.source_obligations import MISSING, declarations, valu
 from trade_plan_monitor.ai.source_risk_controls import parse_source_risk_controls
 from trade_plan_monitor.ai.source_risk_table_coverage import build_risk_table_coverage
 from trade_plan_monitor.ai.update_review import (
+    BuySuspensionPlanCandidateReview,
     PlanCandidateReview,
     build_update_review,
     context_from_review,
@@ -164,7 +165,9 @@ def analyze_source_changes(
     """
     verified_parent = SourceCandidateAssurance.model_validate_json(
         verified_parent.model_dump_json())
-    reviewed = PlanCandidateReview.model_validate_json(reviewed.model_dump_json())
+    review_model = (BuySuspensionPlanCandidateReview
+                    if type(reviewed) is BuySuspensionPlanCandidateReview else PlanCandidateReview)
+    reviewed = review_model.model_validate_json(reviewed.model_dump_json())
     if (context != context_from_review(base_review, verified_parent.binding.candidate_hash)
             or verified_parent.binding.review_evidence_hash != base_review.evidence_hash
             or verified_parent.content_hash != daily_draft_content_sha256(base_review.draft)

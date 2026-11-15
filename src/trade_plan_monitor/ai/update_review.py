@@ -16,6 +16,9 @@ from trade_plan_monitor.ai.daily_review import (
 )
 from trade_plan_monitor.ai.loop_plan_extraction import unsupported_loop_source_spans
 from trade_plan_monitor.ai.plan_update_extraction import (
+    BuySuspensionPlanUpdateContext,
+    BuySuspensionPlanUpdateExtractionOutput,
+    BuySuspensionPlanUpdateExtractionResult,
     PlanUpdateContext,
     PlanUpdateExtractionOutput,
     PlanUpdateExtractionResult,
@@ -39,7 +42,10 @@ from trade_plan_monitor.domain.market_linkage_validation import (
     parse_current_draft,
 )
 from trade_plan_monitor.domain.risk_scope import restrict_scope, risk_identity
-from trade_plan_monitor.domain.unified_plan_validation import unified_plan_issues
+from trade_plan_monitor.domain.unified_plan_validation import (
+    BuySuspensionPlanDraft,
+    unified_plan_issues,
+)
 
 _AMBIGUOUS = re.compile(
     r"待确认|不确定|不要|无需|并非|尚未|不是|不能|不应|假设|假想|假定|示例|"
@@ -131,6 +137,24 @@ class PlanCandidateReview(ResearchValue):
         )
 
 
+class BuySuspensionPlanCandidateReview(PlanCandidateReview):
+    """Current-only review evidence, separate from public frozen preparation."""
+
+    schema_version: Literal["monitor-loop-candidate-evidence-v2"] = (
+        "monitor-loop-candidate-evidence-v2"
+    )
+    draft: BuySuspensionPlanDraft
+
+    @property
+    def evidence_hash(self):
+        return sha256(
+            ("monitor-loop-candidate-evidence-v2\0" + canonical_json(self)).encode()
+        ).hexdigest()
+
+    def to_preparation_candidate(self):
+        raise ValueError("BUY_SUSPENSION_FROZEN_UNSUPPORTED")
+
+
 def _issues(values):
     unique = tuple(dict.fromkeys(value[:512] for value in values))
     return unique if len(unique) <= 128 else (*unique[:127], "ADDITIONAL_REVIEW_ISSUES")
@@ -164,7 +188,9 @@ def build_initial_review(draft: CurrentPlanDraft, mapping: DailyMapping, source:
         issues.append("LOOP_SOURCE_TIME_REQUIRED")
     if unsupported_loop_source_spans(source.text):
         issues.append("LOOP_SOURCE_UNSUPPORTED")
-    return PlanCandidateReview(
+    review_model = (BuySuspensionPlanCandidateReview
+                    if draft.schema_version == 10 else PlanCandidateReview)
+    return review_model(
         source_id=source.source_id,
         source_hash=source.binding_hash,
         available_at=source.execution_available_at,
@@ -175,7 +201,9 @@ def build_initial_review(draft: CurrentPlanDraft, mapping: DailyMapping, source:
 
 
 def context_from_review(base: PlanCandidateReview, base_hash: str) -> PlanUpdateContext:
-    base = PlanCandidateReview.model_validate(base.model_dump(mode="python"))
+    current = type(base) is BuySuspensionPlanCandidateReview
+    review_model = BuySuspensionPlanCandidateReview if current else PlanCandidateReview
+    base = review_model.model_validate(base.model_dump(mode="python"))
     if base.issues:
         raise ValueError("unresolved predecessor blocks dependent work")
     evidence = tuple(
@@ -191,7 +219,8 @@ def context_from_review(base: PlanCandidateReview, base_hash: str) -> PlanUpdate
         for bound in base.bindings
         for clause in bound.clauses
     )
-    return PlanUpdateContext(
+    context_model = BuySuspensionPlanUpdateContext if current else PlanUpdateContext
+    return context_model(
         base_hash=base_hash,
         snapshot=base.draft.to_executable(),
         available_at=base.available_at,
@@ -352,6 +381,7 @@ def _scope_issues(output, base=None, current=None, *, historical=False):
         "execution_policy": r"执行|execution",
         "trading_rules": r"交易规则|trading",
         "metadata": r"元数据|metadata",
+        "buy_suspension": r"禁买|buy_suspension",
     }
     verbs = {
         "ADD": r"新增|增加|add",
@@ -487,9 +517,15 @@ def build_update_review(
     historical: bool = False,
 ) -> PlanCandidateReview:
     """Recompute from a validated base; a mapping override is an explicit human correction."""
-    base = PlanCandidateReview.model_validate(base.model_dump(mode="python"))
+    current_version = type(base) is BuySuspensionPlanCandidateReview
+    review_model = BuySuspensionPlanCandidateReview if current_version else PlanCandidateReview
+    output_model = (BuySuspensionPlanUpdateExtractionOutput if current_version
+                    else PlanUpdateExtractionOutput)
+    if current_version and historical:
+        raise ValueError("BUY_SUSPENSION_FROZEN_UNSUPPORTED")
+    base = review_model.model_validate(base.model_dump(mode="python"))
     source = PreparationSource.model_validate(source.model_dump(mode="python"))
-    output = PlanUpdateExtractionOutput.model_validate(output.model_dump(mode="python"))
+    output = output_model.model_validate(output.model_dump(mode="python"))
     context = context_from_review(base, base.evidence_hash)
     if (source.execution_available_at is None
             or context.available_at > source.execution_available_at):
@@ -505,6 +541,9 @@ def build_update_review(
     base_fields = {b.path: b for b in base.bindings}
     bindings = []
     issues = _scope_issues(output, base, current, historical=historical)
+    if current_version and (output.scope == "FULL_REPLACEMENT"
+            or materialized.draft.buy_suspension != base.draft.buy_suspension):
+        issues.append("BUY_SUSPENSION_REPLACEMENT_REVIEW_REQUIRED")
     if not historical:
         for operation in output.operations:
             if operation.scope_change is None:
@@ -591,7 +630,7 @@ def build_update_review(
         for identity in output.account_context.dependent_rule_ids:
             if identity not in supported:
                 issues.append("UPDATE_ACCOUNT_DEPENDENCY_REQUIRED: " + identity)
-    return PlanCandidateReview(
+    return review_model(
         source_id=source.source_id,
         source_hash=source.binding_hash,
         available_at=source.execution_available_at,
@@ -651,17 +690,34 @@ class MaterializedUpdateCandidate(ResearchValue):
         )
 
 
+class BuySuspensionMaterializedUpdateCandidate(MaterializedUpdateCandidate):
+    schema_version: Literal["monitor-loop-materialized-update-v2"] = (
+        "monitor-loop-materialized-update-v2"
+    )
+    extraction: BuySuspensionPlanUpdateExtractionResult
+    review: BuySuspensionPlanCandidateReview
+
+    def to_preparation_candidate(self):
+        raise ValueError("BUY_SUSPENSION_FROZEN_UNSUPPORTED")
+
+
 def materialize_extraction(base, base_hash, source, extraction, *, historical=False):
     """Bind the semantic result to the exact predecessor and current provider response."""
     private_derivation = extraction.source_derivation
     private_issues = extraction.derivation_issues
     diagnostic = extraction.diagnostic
-    extraction = PlanUpdateExtractionResult.model_validate(extraction.model_dump(mode="python"))
+    current = type(extraction) is BuySuspensionPlanUpdateExtractionResult
+    if current and historical:
+        raise ValueError("BUY_SUSPENSION_FROZEN_UNSUPPORTED")
+    extraction_model = (BuySuspensionPlanUpdateExtractionResult
+                        if current else PlanUpdateExtractionResult)
+    extraction = extraction_model.model_validate(extraction.model_dump(mode="python"))
     context = context_from_review(base, base_hash)
     expected = sha256(
         canonical_json(
             {
-                "domain": "monitor-loop-update-evidence-v1",
+                "domain": ("monitor-loop-update-evidence-v2" if current
+                           else "monitor-loop-update-evidence-v1"),
                 "source_binding_hash": source.binding_hash,
                 "context": context,
                 "output": extraction.output,
@@ -692,7 +748,9 @@ def materialize_extraction(base, base_hash, source, extraction, *, historical=Fa
     extraction = extraction.model_copy(update=dict(
         source_derivation=private_derivation, derivation_issues=private_issues,
         diagnostic=diagnostic))
-    return MaterializedUpdateCandidate(
+    result_model = (BuySuspensionMaterializedUpdateCandidate
+                    if current else MaterializedUpdateCandidate)
+    return result_model(
         extraction=extraction,
         review=build_update_review(base, source, extraction.output, historical=historical),
     )
