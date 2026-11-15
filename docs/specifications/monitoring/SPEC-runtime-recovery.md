@@ -253,6 +253,12 @@ Production composition enables recoverable enqueue in the caller-owned decision 
 
 ## Structure and style
 
+### RR-PBS01 — Required BUY guard work within the current duty
+
+The current realtime duty's bounded BUY suspension check is a required input to that same duty. Its calendar, factor and minute requests use the existing serial recovery/controller path with a dedicated `buy_suspension_pending` check; the duty's own running flag does not make this work yield to itself. Actual active or waiting controller work still takes priority. `run_deadline` installs the next native deadline computed by `_next_deadline_due_at`; the existing `_GAP_REPAIR_RESERVE` also makes guard work yield near that deadline. The target is cleared on normal, exceptional and cancelled exit. Ordinary background recovery retains its original realtime-busy check.
+
+This changes scheduling admission only. Physical request joining, cancellation/draining, serial ownership, bounded batches, source/configuration/generation checks, repository revision fences and final BUY commit checks remain required. Yielding or incomplete evidence remains unverified and blocks BUY; it cannot mint clear proof. No new scheduler, worker, strategy or public replay format is introduced. Isolated actual `_execute_deadline` tests cover self-duty progress, another physically active realtime request, next-deadline yielding and error/cancellation cleanup; see the PBS verification report for exact candidate evidence.
+
 Small typed functions in runtime/reconciliation.py and runtime/recovery_targets.py; reuse scheduler, request controller, evaluator transactions and SQLite repositories. No general workflow engine. Python 3.14, explicit enums, immutable targets.
 ## Commands and testing
 
