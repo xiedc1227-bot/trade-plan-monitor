@@ -394,3 +394,14 @@ OpenAPI 快照 SHA-256：`8821fa8577e72eab4b607bf18306c0ccca4e30b00fa686616c9f84
 候选生成TypeScript SHA-256：兼容版`bc2d5f7e0315490d47d98593843110ce5fab62e4f0c815df6ab1bddeacee8f4b`；规范版`622ead01cea642615080d4e0df75e3567498d2b807fb82fa60ef706d4e1a88a2`。
 
 T17a25产物落地更新：`76031b3`逐字节写入上述四份候选产物，并仅登记投影前的新路径。双配置生成检查及35个唯一实际产物/历史契约检查通过（其中13项与T17a24重叠，不得累加为唯一数）。此前待补的生成/路径门禁已关闭。UI、联合场景、安装及语料/最终验收仍分别待完成；上述权限及能力边界不变。
+
+
+## U-PBS-extraction — 仅当前契约的持续禁买提取（2026-11-15）
+
+[PBS第6.1节](SPEC-plan-buy-suspension.zh-CN.md#61-pbs-t01冻结的工程契约)拥有已批准契约。显式配置 `ai.prompt_version: plan-extract-v13` 选择 `BuySuspensionPlanExtractionOutput` / `BuySuspensionPlanExtractionResult`，使用 `contract_version="plan-buy-suspension-extraction-v1"`，仅接收Schema10 / `condition-plan-v6`。既有 `POST /api/v1/plan-extractions` 和操作GET通过已配置服务及既有提取记录存储传递仅供审核的结果。不新增请求字段、提供方、第二次自动提取、页面或类型选择器。默认保持 `plan-extract-v12`；历史标签仍使用既有v12路由。既有v12提示词字节及Schema5–9封装准入保持不变。提示词／Schema／封装组合错误时拒绝，不丢字段转换。提取成功仅表示候选完成解析，不代表原文审核或启用通过。
+
+可调用的当前续版入口位于 `ai/plan_update_extraction.py`：`extract_buy_suspension_plan_update(request_id=..., source=..., context=..., config=..., provider=...)`。它要求显式v13配置、一份 `PreparationSource`，以及通过 `context_from_review` 从服务端拥有的前序审核建立的确切 `BuySuspensionPlanUpdateContext`。入口使用 `monitor-loop-update-extract-v2` / `monitor-loop-update-extraction-v2` 执行一次有界提供方调用。既有 `materialize_extraction` 和来源变更审核归属以确定性方式保留完整定义、继承字段证据及普通续版起点。独立的仅当前审核／合并模型保持旧v1联合类型封闭。提供方输出不能解除禁买：提议修改保护或完整接替时，保留 `BUY_SUSPENSION_REPLACEMENT_REVIEW_REQUIRED`。T04负责原文哈希特定澄清／覆盖；T08负责确切已审核接替启用。本入口不使用公共冻结准备工作器。其提取、审核及合并候选调用 `to_preparation_candidate()` 时以 `BUY_SUSPENSION_FROZEN_UNSUPPORTED` 拒绝；历史合并同样拒绝Schema10。
+
+提示词保留触发、持续禁止本计划全部BUY的后果、审核接替恢复及独立风险线／低吸区义务。原文未明确周期／谓词时保留 `buy_suspension.condition=null`；未明确核查起点时保留 `buy_suspension.effective_from=null`。原始03/04直接提取结果继续阻断，包括其他未解决义务。已批准澄清不能由模型编造或写入原文；T04必须绑定确切原文哈希和原始义务身份。瞬时条件、SELL分支、通用审核事实或说明文字不能证明持续义务已完整覆盖。工程样本单独标注，不构成原文正例，也不关闭F083/C05。T03仅实现提取，不代表持久运行状态、BUY约束、启用、生成前端契约或实际监控就绪已经完成。
+
+离线验证入口为 `tests/unit/test_plan_buy_suspension_extraction.py`、`tests/unit/test_plan_buy_suspension_update_extraction.py`、`tests/integration/test_plan_buy_suspension_extraction_route.py` 和 `tests/integration/test_plan_buy_suspension_update_flow.py`。测试使用离线替身覆盖真实有界解析器及已配置HTTP传输、新旧精确准入、原文哈希和缺失值、隔离提取存储、继承证据、确定性派生及冻结拒绝。产物位于 `build/pbs/t03/`；Python异步循环测试需要已授权的localhost执行方式。不需要用户数据库、实际密钥、外部提供方调用或修改用户配置。真实提取调用保持 **0/48**。
