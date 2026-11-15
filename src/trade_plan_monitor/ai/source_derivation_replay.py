@@ -7,13 +7,18 @@ from trade_plan_monitor.domain.daily_hash import canonical
 
 
 def _inputs(source, context):
-    from trade_plan_monitor.ai.plan_update_extraction import PlanUpdateContext
+    from trade_plan_monitor.ai.plan_update_extraction import (
+        BuySuspensionPlanUpdateContext,
+        PlanUpdateContext,
+    )
     from trade_plan_monitor.backtest.preparation_models import PreparationSource
 
     if not isinstance(source, PreparationSource) or not isinstance(context, PlanUpdateContext):
         raise ValueError("derivation requires the exact source and predecessor context")
+    context_model = (BuySuspensionPlanUpdateContext
+                     if type(context) is BuySuspensionPlanUpdateContext else PlanUpdateContext)
     return (PreparationSource.model_validate(source.model_dump(mode="python")),
-            PlanUpdateContext.model_validate(context.model_dump(mode="python")))
+            context_model.model_validate(context.model_dump(mode="python")))
 
 
 def _stage(phase, output):
@@ -25,6 +30,8 @@ def expand_update_with_evidence(raw_json, source, context):
     from trade_plan_monitor.ai.extraction import _parse_untrusted_output
     from trade_plan_monitor.ai.plan_delta_wire import CompactDeltaOutput, expand_delta_output
     from trade_plan_monitor.ai.plan_update_extraction import (
+        BuySuspensionPlanUpdateContext,
+        BuySuspensionPlanUpdateExtractionOutput,
         PlanUpdateExtractionOutput,
         validate_update_evidence,
     )
@@ -38,6 +45,15 @@ def expand_update_with_evidence(raw_json, source, context):
     raw = json.loads(raw_json)
     if not isinstance(raw, dict):
         raise ValueError("unsupported derivation protocol")
+    if type(context) is BuySuspensionPlanUpdateContext:
+        output = _parse_untrusted_output(raw_json, prompt_version="monitor-loop-update-extract-v2",
+            output_model=BuySuspensionPlanUpdateExtractionOutput)
+        validate_update_evidence(output, source, context)
+        stages = (_stage("DELTA_EXPANDED", output), _stage("SOURCE_NORMALIZED", output))
+        return output, SourceDerivationEvidence.build(kind="PREDECESSOR_PATCH",
+            source_hash=source.source_hash, raw_json=raw_json,
+            context_json=canonical(context.model_dump(mode="json")), base_hash=context.base_hash,
+            stages=stages)
     direct = raw.get("schema_version") == "monitor-loop-update-extraction-v1"
     model = PlanUpdateExtractionOutput if direct else response_model(update=True)
     parsed = _parse_untrusted_output(raw_json, prompt_version="monitor-loop-update-extract-v1",

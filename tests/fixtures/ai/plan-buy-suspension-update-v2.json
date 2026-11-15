@@ -1,0 +1,6 @@
+{
+  "kind": "engineering-only-offline-fixture",
+  "source": "仅修改计划名称，其余规则及持续禁买义务保留。",
+  "schema_version": "monitor-loop-update-extraction-v2",
+  "prompt_version": "monitor-loop-update-extract-v2"
+}
