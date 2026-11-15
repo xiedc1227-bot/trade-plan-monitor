@@ -138,7 +138,8 @@ class ExplicitPlanCapabilityView(ApiValue):
     schema_version: Literal[5] = 5
     execution_mode: Literal["CONDITION_PLAN"] = "CONDITION_PLAN"
     execution_version: Literal["condition-plan-v1"] = "condition-plan-v1"
-    supported_schema_versions: tuple[int, ...] = (5, 6, 7, 8, 9)
+    supported_schema_versions: tuple[int, ...] = (5, 6, 7, 8, 9, 10)
+    buy_suspension_execution_version: Literal["condition-plan-v6"] = "condition-plan-v6"
     linked_execution_version: Literal["condition-plan-v2"] = "condition-plan-v2"
     capital_execution_version: Literal["condition-plan-v5"] = "condition-plan-v5"
     pretrade_execution_version: Literal["condition-plan-v4"] = "condition-plan-v4"

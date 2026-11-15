@@ -101,7 +101,10 @@ class DailyReviewPreview(ApiValue):
 
 class DailyEditorSchemaView(ApiValue):
     schema_version: Literal[5] = 5
-    supported_schema_versions: tuple[int, ...] = (5, 6, 7, 8, 9)
+    supported_schema_versions: tuple[int, ...] = (5, 6, 7, 8, 9, 10)
+    buy_suspension_candidate_schema: dict | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
     linked_candidate_schema: dict
     linked_policy_definitions: dict[str, str]
     capital_candidate_schema: dict
@@ -124,7 +127,9 @@ async def editor_schema():
     )
     from trade_plan_monitor.domain.p2_validation import P2PlanDraft
     from trade_plan_monitor.domain.p3_validation import P3PlanDraft
+    from trade_plan_monitor.domain.unified_plan_validation import BuySuspensionPlanDraft
     return DailyEditorSchemaView(
+        buy_suspension_candidate_schema=BuySuspensionPlanDraft.model_json_schema(),
         capital_candidate_schema=P3PlanDraft.model_json_schema(),
         pretrade_candidate_schema=P2PlanDraft.model_json_schema(),
         candidate_schema=UnifiedPlanDraft.model_json_schema(),

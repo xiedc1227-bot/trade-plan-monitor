@@ -13,6 +13,10 @@ from pathlib import Path
 
 import pytest
 from scripts import generate_frontend_types as generator
+from tests.contract.test_plan_buy_suspension_api_projection import (
+    ADDED_SHA256,
+    buy_suspension_projection,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 READINESS_PATH = "/api/v1/plan-versions/{version_id}/monitor-readiness"
@@ -74,6 +78,8 @@ def _canonical(value):
 
 def readiness_projection(document):
     """Verify the entire fixed additive surface, then remove only its exact names."""
+    if set(ADDED_SHA256) & document["components"]["schemas"].keys():
+        document = buy_suspension_projection(document)
     assert READINESS_PATH in document["paths"]
     assert sha256(_canonical(document["paths"][READINESS_PATH]).encode()).hexdigest() == PATH_SHA256
     schemas = document["components"]["schemas"]
@@ -96,7 +102,8 @@ def assert_h04_hashes(document, version):
 
 @pytest.fixture(scope="module", params=[1, 2], ids=["compatibility-v1", "canonical-v2"])
 def contract(request):
-    return request.param, generator.build_openapi_document(monitor_contract_version=request.param)
+    return request.param, buy_suspension_projection(
+        generator.build_openapi_document(monitor_contract_version=request.param))
 
 
 def test_projection_restores_fixed_h04_bytes_without_mutating_input(contract):
