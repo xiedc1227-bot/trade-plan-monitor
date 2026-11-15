@@ -5,7 +5,7 @@ from decimal import Decimal
 from hashlib import sha256
 from typing import Literal
 
-from pydantic import Field, JsonValue
+from pydantic import Field, JsonValue, model_validator
 
 from trade_plan_monitor.ai.review import MappingValidationError, server_source_clauses
 from trade_plan_monitor.domain.daily_hash import daily_hash
@@ -169,6 +169,26 @@ class DailySupplement(DailyValue):
     path: str = Field(min_length=1, max_length=512)
     value: JsonValue
     reason: Text
+    source_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$", exclude_if=lambda value: value is None,
+    )
+    obligation_id: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$", exclude_if=lambda value: value is None,
+    )
+    buy_suspension_clarification: Literal[
+        "ALL_PLAN_BUY_REVIEWED_REPLACEMENT_ONLY"
+    ] | None = Field(default=None, exclude_if=lambda value: value is None)
+
+    @model_validator(mode="after")
+    def source_obligation(self):
+        if (self.source_hash is None) != (self.obligation_id is None):
+            raise ValueError("source clarification requires both source hash and obligation")
+        if self.source_hash is not None and not self.path.startswith("buy_suspension."):
+            raise ValueError("source-bound clarification is limited to persistent BUY guard fields")
+        if self.buy_suspension_clarification is not None and (
+                self.source_hash is None or not self.path.startswith("buy_suspension.")):
+            raise ValueError("persistent BUY clarification requires its exact source obligation")
+        return self
 
 
 class DailyFieldBinding(DailyValue):

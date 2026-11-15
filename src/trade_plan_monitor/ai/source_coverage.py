@@ -9,11 +9,13 @@ from trade_plan_monitor.domain.daily_plan_validation import daily_draft_content_
 from trade_plan_monitor.domain.daily_scope import scope_hash
 
 
-def assess_source_coverage(draft, mapping, source, *, normalization=None, origin="AI_HISTORICAL"):
+def assess_source_coverage(draft, mapping, source, *, normalization=None, origin="AI_HISTORICAL",
+                           allow_buy_suspension_clarifications=True):
     """Prove the entire source and complete candidate; partial changes use another owner."""
     if isinstance(source, str) and len(source) > MAX_SOURCE_CODEPOINTS:
         return _source_work_limit(draft, mapping, source, origin=origin)
-    analysis = analyze_source(draft, mapping, source, normalization=normalization)
+    analysis = analyze_source(draft, mapping, source, normalization=normalization,
+        allow_buy_suspension_clarifications=allow_buy_suspension_clarifications)
     mapping = analysis.mapping
     issues = list(analysis.issues)
     obligations = analysis.obligations

@@ -103,6 +103,9 @@ def _read_version_coverage(session, details, *, clock):
         return None
     draft = load_daily_draft_json(details.payload_json)
     _verify_supplements(session, draft, details.daily_mapping, clock=clock)
+    validate_buy_suspension_clarifications(draft, details.daily_mapping.supplements,
+                                          details.source_text)
+    _verify_buy_suspension_replacement_intent(session, details, draft, clock=clock)
     if stored.assessment.source_hash != scope_hash(details.source_text):
         raise SourceCoverageAuthorityError("SOURCE_COVERAGE_STALE")
     current = _assessment(draft, details.daily_mapping, details.source_text,
@@ -129,6 +132,98 @@ def _verify_supplements(session, draft, mapping, *, clock):
             or record["payload"].get("supplements") != [
                 row.model_dump(mode="json") for row in mapping.supplements]):
         raise SourceCoverageAuthorityError()
+
+
+def validate_buy_suspension_clarifications(draft, supplements, source_text):
+    """Resolve every claimed obligation from the actual source, never a client ID list."""
+    import json
+
+    from trade_plan_monitor.ai.daily_review import DailyMapping, daily_source_clauses
+    from trade_plan_monitor.ai.source_coverage_core import analyze_source
+    from trade_plan_monitor.ai.source_obligations import MISSING, declarations, declared_value_at
+
+    scoped = tuple(s for s in supplements if s.source_hash is not None)
+    if not scoped:
+        return
+    if draft.schema_version != 10 or source_text is None:
+        raise ValueError("persistent BUY clarification requires its exact source text")
+    digest = daily_draft_content_sha256(draft)
+    mapping = DailyMapping(mapping_version="daily-mapping-v1", candidate_content_hash=digest,
+        clauses=daily_source_clauses(source_text), bindings=(), supplements=())
+    raw = analyze_source(draft, mapping, source_text, allow_buy_suspension_clarifications=False)
+    obligations = {o.obligation_id: o for o in raw.obligations if o.semantics_json is not None
+                   and json.loads(o.semantics_json).get("treatment") == "PERSISTENT_BUY_SUSPENSION"}
+    parsed = declarations(source_text)
+    allowed = {"buy_suspension.condition.type", "buy_suspension.condition.timeframe_minutes",
+               "buy_suspension.condition.price_fen", "buy_suspension.effective_from"}
+    for supplement in scoped:
+        obligation = obligations.get(supplement.obligation_id)
+        if (supplement.source_hash != scope_hash(source_text) or obligation is None
+                or supplement.candidate_content_hash != digest or supplement.path not in allowed):
+            raise ValueError("persistent BUY clarification belongs to another source or obligation")
+        meaning = json.loads(obligation.semantics_json)
+        known = declared_value_at(parsed, supplement.path)
+        if supplement.path == "buy_suspension.condition.price_fen":
+            known = meaning["price_fen"]
+        elif supplement.path == "buy_suspension.condition.timeframe_minutes" and (
+                meaning["timeframe_minutes"] is not None):
+            known = meaning["timeframe_minutes"]
+        if known is not MISSING and known is not None and canonical(known) != canonical(
+                supplement.value):
+            raise ValueError("clarification cannot override an explicit source value")
+
+
+def validate_buy_suspension_replacement_intent(draft, intent, source_text):
+    """Validate a finite explicit source proposal, without resolving runtime ancestry."""
+    from trade_plan_monitor.ai.source_boundaries import partition_at, source_partitions
+
+    if (draft.schema_version != 10 or source_text is None
+            or intent.source_hash != scope_hash(source_text)
+            or intent.candidate_content_hash != daily_draft_content_sha256(draft)
+            or source_text[intent.source_start:intent.source_end] != intent.excerpt
+            or intent.source_start and source_text[intent.source_start - 1] not in "\r\n"
+            or intent.source_end < len(source_text) and source_text[intent.source_end] not in "\r\n"
+            or partition_at(source_partitions(source_text), intent.source_start) == "B"):
+        raise ValueError("replacement intent differs from the exact complete new source statement")
+    retirement = {
+        "This new plan replaces the predecessor BUY suspension and explicitly retires its guard.",
+        "本新计划明确接替前序计划的持续禁买义务，并明确废止旧保护条件。",
+    }
+    new_guard = {
+        "This new plan replaces the predecessor BUY suspension and supplies a new guard.",
+        "本新计划明确接替前序计划的持续禁买义务，并采用新保护条件。",
+    }
+    if (intent.excerpt not in (retirement if intent.retire_predecessor_guard else new_guard)
+            or draft.buy_suspension is None and not intent.retire_predecessor_guard
+            or not any(r.side == "BUY" and r.status == "ENABLED" for r in draft.ordinary_rules)):
+        raise ValueError("explicit new BUY and guard replacement/retirement are required")
+
+
+def _verify_buy_suspension_replacement_intent(session, details, draft, *, clock):
+    from trade_plan_monitor.state.daily_repository import DailyRepository
+    from trade_plan_monitor.state.source_coverage_values import BuySuspensionReplacementIntent
+
+    daily = DailyRepository(session, clock=clock, id_factory=None)
+    review = daily.get("review-" + details.id)
+    intent = None if review is None else review["payload"].get("buy_suspension_replacement_intent")
+    if intent is None:
+        return
+    registered = daily.get(daily_hash("daily-human-supplements-v1", dict(
+        symbol=draft.symbol, content_hash=daily_draft_content_sha256(draft))))
+    if (registered is None or registered["kind"] != "DRAFT"
+            or registered["payload"].get("buy_suspension_replacement_intent") != intent):
+        raise SourceCoverageAuthorityError("SOURCE_COVERAGE_STALE")
+    validate_buy_suspension_replacement_intent(draft,
+        BuySuspensionReplacementIntent.model_validate(intent), details.source_text)
+
+
+def _require_buy_suspension_replacement_review(work, details):
+    review = work.daily.get("review-" + details.id)
+    if (review is not None
+            and review["payload"].get("buy_suspension_replacement_intent") is not None):
+        # A registered source proposal is not runtime replacement authority. T08
+        # admits exact receipts only with the real predecessor/guard snapshot.
+        raise SourceCoverageAuthorityError("BUY_SUSPENSION_REPLACEMENT_REVIEW_REQUIRED")
 
 
 def _require_current_coverage(session, details, *, clock, require_review=False):
@@ -161,6 +256,7 @@ def require_current_coverage(work, details, *, require_review=False):
 
 
 def require_confirmation_coverage(work, details, command):
+    _require_buy_suspension_replacement_review(work, details)
     expected = (getattr(command, "coverage_evidence_hash", None),
                 getattr(command, "coverage_rules_version", None))
     if None in expected:

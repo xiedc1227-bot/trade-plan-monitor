@@ -39,6 +39,7 @@ from trade_plan_monitor.state.daily_state_models import (
     DailyRiskState,
     DailySignalState,
 )
+from trade_plan_monitor.state.source_coverage_values import BuySuspensionReplacementIntent
 from trade_plan_monitor.web.routers.plans import (
     PlanDocument,
     PlanServiceDependency,
@@ -58,8 +59,20 @@ PositiveWholeQty = Annotated[
 class DailySupplementCommand(ApiValue):
     candidate_json: PlanDocument
     content_hash: Sha256Hex
-    supplements: tuple[DailySupplement, ...] = Field(min_length=1, max_length=2000, strict=False)
+    supplements: tuple[DailySupplement, ...] = Field(max_length=2000, strict=False)
     expected_revision: Qty
+    source_text: str | None = Field(
+        default=None, min_length=1, max_length=150_000, exclude_if=lambda value: value is None,
+    )
+    buy_suspension_replacement_intent: BuySuspensionReplacementIntent | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
+
+    @model_validator(mode="after")
+    def explicit_operation(self):
+        if not self.supplements and self.buy_suspension_replacement_intent is None:
+            raise ValueError("register at least one supplement or an explicit replacement intent")
+        return self
 
 
 class DailyMutationReceipt(ApiValue):
@@ -81,6 +94,9 @@ class DailyReviewPreview(ApiValue):
     candidate_json: PlanDocument
     review: DailyReviewSnapshot
     supplement_revision: Qty
+    buy_suspension_replacement_intent: BuySuspensionReplacementIntent | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
 
 
 class DailyEditorSchemaView(ApiValue):
@@ -160,6 +176,16 @@ async def _preview(command: DailyReviewPreviewCommand, context: MutationContextD
     if registered["content_hash"] != digest:
         raise ValueError("registered supplements differ from the current candidate")
     supplements = tuple(DailySupplement.model_validate(s) for s in registered["supplements"])
+    from trade_plan_monitor.state.source_coverage_authority import (
+        validate_buy_suspension_clarifications,
+        validate_buy_suspension_replacement_intent,
+    )
+
+    validate_buy_suspension_clarifications(draft, supplements, command.source_text)
+    intent = registered.get("buy_suspension_replacement_intent")
+    if intent is not None:
+        intent = BuySuspensionReplacementIntent.model_validate(intent)
+        validate_buy_suspension_replacement_intent(draft, intent, command.source_text)
     registered_paths = {s.path for s in supplements}
     mapping = mapping.model_copy(
         update={
@@ -215,6 +241,7 @@ async def _preview(command: DailyReviewPreviewCommand, context: MutationContextD
         candidate_json=daily_draft_json(draft),
         review=build_daily_review(draft, mapping, command.source_text),
         supplement_revision=registered["revision"],
+        buy_suspension_replacement_intent=intent,
     )
 
 

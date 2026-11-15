@@ -39,6 +39,12 @@ def save_daily_draft(work, draft, *, mapping, source_text, clock, extraction_id=
     )
     if existing is not None:
         raise DuplicatePlanVersionError(draft.plan_id, draft.version)
+    from trade_plan_monitor.state.source_coverage_authority import (
+        validate_buy_suspension_clarifications,
+        validate_buy_suspension_replacement_intent,
+    )
+
+    validate_buy_suspension_clarifications(draft, mapping.supplements, source_text)
     snapshot = build_daily_review(draft, mapping, source_text)
     if extraction_id is not None:
         extracted = work.daily.get("extraction-" + extraction_id)
@@ -49,7 +55,8 @@ def save_daily_draft(work, draft, *, mapping, source_text, clock, extraction_id=
             or extracted["symbol"] != draft.symbol
         ):
             raise ValueError("daily extraction provenance was not recorded by the server")
-    if mapping.supplements:
+    registered, intent = None, None
+    if mapping.supplements or draft.schema_version == 10:
         from trade_plan_monitor.domain.daily_hash import daily_hash
 
         identity = daily_hash(
@@ -57,7 +64,7 @@ def save_daily_draft(work, draft, *, mapping, source_text, clock, extraction_id=
             {"symbol": draft.symbol, "content_hash": snapshot.content_hash},
         )
         registered = work.daily.get(identity)
-        if (
+        if mapping.supplements and (
             registered is None
             or registered["kind"] != "DRAFT"
             or registered["payload"].get("source") != "EXPLICIT_HUMAN_OPERATION"
@@ -65,6 +72,18 @@ def save_daily_draft(work, draft, *, mapping, source_text, clock, extraction_id=
             != [s.model_dump(mode="json") for s in mapping.supplements]
         ):
             raise ValueError("human supplements require a separate registered human operation")
+        if registered is not None:
+            intent = registered["payload"].get("buy_suspension_replacement_intent")
+        if intent is not None:
+            from trade_plan_monitor.state.source_coverage_values import (
+                BuySuspensionReplacementIntent,
+            )
+
+            intent = BuySuspensionReplacementIntent.model_validate(intent)
+            validate_buy_suspension_replacement_intent(draft, intent, source_text)
+            if registered["payload"]["supplements"] != [
+                    s.model_dump(mode="json") for s in mapping.supplements]:
+                raise ValueError("replacement intent differs from its registered supplement set")
     repo = work.plans
     now = clock().isoformat()
     source = PlanSource(
@@ -121,6 +140,8 @@ def save_daily_draft(work, draft, *, mapping, source_text, clock, extraction_id=
             "review_id": None,
             "review_revision": 0,
             "plan_version_id": version.id,
+            **({"buy_suspension_replacement_intent": intent.model_dump(mode="json")}
+               if intent is not None else {}),
         },
     )
     from trade_plan_monitor.state.source_coverage_authority import save_version_coverage

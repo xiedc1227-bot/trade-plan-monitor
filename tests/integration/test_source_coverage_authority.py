@@ -256,3 +256,126 @@ def test_repository_activation_accepts_only_the_exact_current_reviewed_bundle(st
                                      validation=PlanValidationResult(issues=()))
         assert active.plan_version_id == identity and active.revision == 1
         work.commit()
+@pytest.fixture
+def replacement_chain(tmp_path):
+    from tests.integration.test_daily_plan_chain import Chain
+
+    chain = Chain(tmp_path)
+    with chain.client:
+        yield chain
+
+
+def _replacement_source_case():
+    from tests.integration.test_market_linkage_review import source_mapping
+    from tests.unit.test_plan_buy_suspension_contract import suspension_payload
+
+    from trade_plan_monitor.ai.daily_review import DailyClause
+    from trade_plan_monitor.ai.review import server_source_clauses
+    from trade_plan_monitor.domain.daily_scope import scope_hash
+    from trade_plan_monitor.domain.unified_plan_validation import BuySuspensionPlanDraft
+    from trade_plan_monitor.state.source_coverage_values import BuySuspensionReplacementIntent
+
+    payload = suspension_payload()
+    payload["buy_suspension"] = None
+    draft = BuySuspensionPlanDraft.model_validate(payload)
+    source, mapping = source_mapping(draft)
+    excerpt = ("This new plan replaces the predecessor BUY suspension "
+               "and explicitly retires its guard.")
+    start = len(source) + 1
+    source += "\n" + excerpt
+    mapping = mapping.model_copy(update={"clauses": (*mapping.clauses, *(
+        DailyClause.model_validate(c.model_dump() | dict(disposition="CONTEXT",
+            semantic_role="COMMENTARY", paths=(), reason="Source replacement proposal"))
+        for c in server_source_clauses(source)[len(mapping.clauses):]))})
+    intent = BuySuspensionReplacementIntent(source_hash=scope_hash(source),
+        candidate_content_hash=mapping.candidate_content_hash, source_start=start,
+        source_end=len(source), excerpt=excerpt,
+        replacement_reason="An explicitly reviewed new BUY",
+        retire_predecessor_guard=True, acknowledge_unverified_predecessor=True,
+        strategy_effective_from="2026-11-15T09:30:00+08:00")
+    return draft, source, mapping, intent
+
+
+def _replacement_command(draft, source, mapping, intent):
+    from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
+
+    return dict(candidateJson=daily_draft_json(draft), contentHash=mapping.candidate_content_hash,
+        sourceText=source, supplements=[], expectedRevision=0,
+        buySuspensionReplacementIntent=intent.model_dump(mode="json"))
+
+
+def test_buy_suspension_source_intent_is_registered_saved_but_cannot_confirm_or_activate(
+    replacement_chain,
+):
+    from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
+    from trade_plan_monitor.state.daily_review_store import confirm_daily_review, save_daily_draft
+
+    chain = replacement_chain
+    draft, source, mapping, intent = _replacement_source_case()
+    chain.post("plan-review-supplements", _replacement_command(draft, source, mapping, intent))
+    preview = chain.post("plan-review-previews", dict(candidateJson=daily_draft_json(draft),
+        sourceText=source, mapping=mapping.model_dump(mode="json")))
+    assert preview["buySuspensionReplacementIntent"] == intent.model_dump(mode="json")
+    with chain.plans._unit_of_work() as work:
+        identity = save_daily_draft(work, draft, mapping=mapping, source_text=source,
+                                   clock=chain.plans._clock)
+        record = work.daily.get("review-" + identity)
+        assert record["payload"]["buy_suspension_replacement_intent"] == intent.model_dump(
+            mode="json")
+        assert "buy_suspension_replacement" not in record["payload"]
+        work.commit()
+    with chain.plans._unit_of_work() as work:
+        with pytest.raises(source_coverage_authority.SourceCoverageAuthorityError,
+                           match="BUY_SUSPENSION_REPLACEMENT_REVIEW_REQUIRED"):
+            confirm_daily_review(work, _command(work, identity), clock=chain.plans._clock)
+        assert work.plans.get_version_details(identity).review_id is None
+        assert work.plans.get_active(draft.symbol) is None
+        assert work.daily.get("review-" + identity)["payload"]["confirmed"] is False
+
+
+@pytest.mark.parametrize("attack", ["source", "span", "retirement", "predecessor", "content"])
+def test_buy_suspension_replacement_intent_cannot_claim_wrong_source_or_runtime_identity(
+    replacement_chain, attack,
+):
+    chain = replacement_chain
+    draft, source, mapping, intent = _replacement_source_case()
+    command = _replacement_command(draft, source, mapping, intent)
+    row = command["buySuspensionReplacementIntent"]
+    if attack == "source":
+        row["source_hash"] = "0" * 64
+    elif attack == "span":
+        row["source_start"] -= 1
+        row["source_end"] -= 1
+    elif attack == "retirement":
+        row["retire_predecessor_guard"] = False
+    elif attack == "predecessor":
+        row["predecessor_plan_version_id"] = "client-selected-predecessor"
+    else:
+        row["candidate_content_hash"] = "0" * 64
+    chain.post("plan-review-supplements", command, status=422)
+    with chain.plans._unit_of_work() as work:
+        assert work.daily.list(symbol=draft.symbol, kind="DRAFT") == ()
+
+
+def test_buy_suspension_changed_registered_intent_invalidates_its_saved_version(replacement_chain):
+    from trade_plan_monitor.state.daily_review_store import save_daily_draft
+    from trade_plan_monitor.state.source_coverage_authority import read_version_coverage
+
+    chain = replacement_chain
+    draft, source, mapping, intent = _replacement_source_case()
+    command = _replacement_command(draft, source, mapping, intent)
+    chain.post("plan-review-supplements", command)
+    with chain.plans._unit_of_work() as work:
+        identity = save_daily_draft(work, draft, mapping=mapping, source_text=source,
+                                   clock=chain.plans._clock)
+        assert read_version_coverage(work, work.plans.get_version_details(identity)) is not None
+        work.commit()
+    command["expectedRevision"] = 1
+    command["buySuspensionReplacementIntent"]["replacement_reason"] = "Changed explicit decision"
+    chain.post("plan-review-supplements", command)
+    with chain.plans._unit_of_work() as work:
+        with pytest.raises(source_coverage_authority.SourceCoverageAuthorityError,
+                           match="SOURCE_COVERAGE_STALE"):
+            read_version_coverage(work, work.plans.get_version_details(identity))
+        assert work.plans.get_version_details(identity).review_id is None
+        assert work.plans.get_active(draft.symbol) is None

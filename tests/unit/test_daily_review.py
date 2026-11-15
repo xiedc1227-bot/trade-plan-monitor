@@ -203,3 +203,138 @@ def test_range_source_boolean_is_exact_and_cannot_authorize_other_policy(
     else:
         with pytest.raises(ValueError, match="range boundary"):
             build_daily_review(draft, mapping, source)
+def test_buy_suspension_supplement_requires_both_exact_source_and_obligation():
+    from pydantic import ValidationError
+
+    from trade_plan_monitor.ai.daily_review import DailySupplement
+
+    payload = dict(supplement_id="start", candidate_content_hash="a" * 64,
+                   path="buy_suspension.effective_from", value="2026-09-30T09:30:00+08:00",
+                   reason="Explicit checking start")
+    old = DailySupplement.model_validate(payload)
+    assert old.model_dump(mode="json") == payload
+    scoped = DailySupplement.model_validate(payload | {
+        "source_hash": "b" * 64, "obligation_id": "c" * 64,
+    })
+    assert scoped.source_hash == "b" * 64
+    for extra in ({"source_hash": "b" * 64}, {"obligation_id": "c" * 64}):
+        with pytest.raises(ValidationError):
+            DailySupplement.model_validate(payload | extra)
+
+
+def test_buy_suspension_source_metadata_cannot_expand_historical_non_guard_supplements():
+    from pydantic import ValidationError
+
+    from trade_plan_monitor.ai.daily_review import DailySupplement
+
+    payload = dict(supplement_id="old-position", candidate_content_hash="a" * 64,
+                   path="position.max_qty", value=300, reason="Explicit legacy position limit")
+    assert DailySupplement.model_validate(payload).model_dump(mode="json") == payload
+    with pytest.raises(ValidationError):
+        DailySupplement.model_validate(payload | dict(source_hash="b" * 64, obligation_id="c" * 64))
+
+
+def test_buy_suspension_replacement_intent_is_not_a_runtime_receipt():
+    from trade_plan_monitor.state.source_coverage_values import BuySuspensionReplacementIntent
+
+    value = BuySuspensionReplacementIntent(
+        source_hash="a" * 64, candidate_content_hash="b" * 64,
+        source_start=0, source_end=45,
+        excerpt="Explicitly replace the predecessor BUY guard.",
+        replacement_reason="A new independently reviewed strategy",
+        retire_predecessor_guard=True, acknowledge_unverified_predecessor=True,
+        strategy_effective_from="2026-11-15T09:30:00+08:00",
+    )
+    assert value.strategy_effective_from.isoformat() == "2026-11-15T09:30:00+08:00"
+    assert "predecessor_plan_version_id" not in value.model_dump(mode="json")
+    assert value.authority_granted is False
+
+
+def test_buy_suspension_review_record_keeps_old_bytes_without_new_evidence():
+    from trade_plan_monitor.state.daily_state_models import DailyReviewBinding
+
+    payload = dict(confirmed=False, content_hash="a" * 64, source_hash="b" * 64,
+                   evidence_hash="c" * 64, review_id=None, review_revision=0,
+                   plan_version_id="version-1")
+    assert DailyReviewBinding.model_validate(payload).model_dump(mode="json") == payload
+    assert "buy_suspension_replacement" in DailyReviewBinding.model_fields
+
+
+def _buy_suspension_replacement_receipt(**updates):
+    from datetime import datetime
+
+    from tests.unit.test_plan_buy_suspension_contract import suspension_payload
+
+    from trade_plan_monitor.domain.unified_plan_models import BuySuspensionDefinition
+    from trade_plan_monitor.state.source_coverage_values import (
+        BuySuspensionReplacementBinding,
+        BuySuspensionReplacementIntent,
+    )
+
+    # Engineering-only value fixture, not a server-resolved runtime snapshot.
+    intent = dict(source_hash="d" * 64, candidate_content_hash="e" * 64,
+        source_start=0, source_end=45, excerpt="Explicitly replace the predecessor BUY guard.",
+        replacement_reason="Explicit new strategy", retire_predecessor_guard=True,
+        acknowledge_unverified_predecessor=True,
+        strategy_effective_from="2026-11-15T09:30:00+08:00")
+    values = dict(symbol="601021.SH", predecessor_plan_version_id="old-version",
+        predecessor_plan_id="old-plan", predecessor_plan_version=1,
+        predecessor_plan_hash="a" * 64, predecessor_content_hash="b" * 64,
+        predecessor_source_hash="c" * 64, predecessor_review_id="old-review",
+        predecessor_review_revision=1, predecessor_activation_revision=7,
+        predecessor_guard=suspension_payload()["buy_suspension"], predecessor_state_hash="f" * 64,
+        predecessor_state_revision=3, predecessor_unresolved_from="2026-10-01T09:30:00+08:00",
+        predecessor_unresolved_through="2026-10-02T15:00:00+08:00",
+        new_plan_version_id="new-version", new_plan_id="new-plan", new_plan_version=1,
+        new_plan_hash="9" * 64, new_content_hash="e" * 64,
+        new_source_hash="d" * 64, new_review_id="new-review", new_review_revision=1,
+        new_guard=None, intent=intent, confirmed_at="2026-11-15T10:00:00+08:00")
+    values.update(updates)
+    values["intent"] = BuySuspensionReplacementIntent.model_validate(values["intent"])
+    values["predecessor_guard"] = BuySuspensionDefinition.model_validate(
+        values["predecessor_guard"])
+    for name in ("predecessor_unresolved_from", "predecessor_unresolved_through", "confirmed_at"):
+        values[name] = datetime.fromisoformat(values[name])
+    return BuySuspensionReplacementBinding.build(**values)
+
+
+def test_buy_suspension_replacement_receipt_binds_exact_review_and_preserves_unverified_interval():
+    from trade_plan_monitor.state.daily_state_models import DailyReviewBinding
+    from trade_plan_monitor.state.source_coverage_values import BuySuspensionReplacementBinding
+
+    receipt = _buy_suspension_replacement_receipt()
+    assert receipt.version == "buy-suspension-replacement-v1"
+    assert BuySuspensionReplacementBinding.model_validate_json(receipt.model_dump_json()) == receipt
+    assert receipt.predecessor_state_revision == 3 and receipt.new_guard is None
+    assert receipt.intent.acknowledge_unverified_predecessor and receipt.authority_granted is False
+    payload = dict(confirmed=True, content_hash=receipt.new_content_hash,
+        source_hash=receipt.new_source_hash, evidence_hash="a" * 64,
+        review_id=receipt.new_review_id, review_revision=1,
+        plan_version_id=receipt.new_plan_version_id,
+        buy_suspension_replacement_intent=receipt.intent,
+        buy_suspension_replacement=receipt)
+    assert DailyReviewBinding.model_validate(payload).buy_suspension_replacement == receipt
+    from pydantic import ValidationError
+
+    for update in (dict(plan_version_id="other-version"), dict(review_id="other-review"),
+                   dict(source_hash="0" * 64), dict(buy_suspension_replacement_intent=None)):
+        with pytest.raises(ValidationError):
+            DailyReviewBinding.model_validate(payload | update)
+
+
+@pytest.mark.parametrize("attack", ["retirement", "acknowledgement", "source", "start"])
+def test_buy_suspension_replacement_receipt_rejects_missing_exact_decisions(attack):
+    from pydantic import ValidationError
+
+    receipt = _buy_suspension_replacement_receipt()
+    intent = receipt.intent.model_dump(mode="json")
+    if attack == "retirement":
+        intent["retire_predecessor_guard"] = False
+    elif attack == "acknowledgement":
+        intent["acknowledge_unverified_predecessor"] = False
+    elif attack == "source":
+        intent["source_hash"] = "0" * 64
+    else:
+        intent["strategy_effective_from"] = "2026-11-15T01:30:00+00:00"
+    with pytest.raises(ValidationError):
+        _buy_suspension_replacement_receipt(intent=intent)

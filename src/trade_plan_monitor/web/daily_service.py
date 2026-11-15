@@ -107,6 +107,19 @@ def mutate_daily(lifecycle, *, operation_name, command, context, request_hash):
                 from trade_plan_monitor.ai.daily_review import semantic_values
 
                 values = semantic_values(draft)
+                from trade_plan_monitor.state.source_coverage_authority import (
+                    validate_buy_suspension_clarifications,
+                    validate_buy_suspension_replacement_intent,
+                )
+
+                validate_buy_suspension_clarifications(draft, command.supplements,
+                                                      command.source_text)
+                intent = command.buy_suspension_replacement_intent
+                if intent is not None:
+                    validate_buy_suspension_replacement_intent(draft, intent, command.source_text)
+                if (len({s.supplement_id for s in command.supplements}) != len(command.supplements)
+                        or len({s.path for s in command.supplements}) != len(command.supplements)):
+                    raise ValueError("supplement identities and paths must be unique")
                 for item in command.supplements:
                     if (
                         item.candidate_content_hash != digest
@@ -129,6 +142,8 @@ def mutate_daily(lifecycle, *, operation_name, command, context, request_hash):
                         "content_hash": digest,
                         "source": "EXPLICIT_HUMAN_OPERATION",
                         "supplements": [s.model_dump(mode="json") for s in command.supplements],
+                        **({"buy_suspension_replacement_intent": intent.model_dump(mode="json")}
+                           if intent is not None else {}),
                     },
                 )
             elif operation == "POSITION":
@@ -430,6 +445,9 @@ def read_daily_supplements(lifecycle, *, candidate_json):
             "content_hash": digest,
             "revision": row["revision"],
             "supplements": [s.model_dump(mode="json") for s in supplements],
+            **({"buy_suspension_replacement_intent": row["payload"][
+                "buy_suspension_replacement_intent"]}
+               if row["payload"].get("buy_suspension_replacement_intent") is not None else {}),
         }
 
 

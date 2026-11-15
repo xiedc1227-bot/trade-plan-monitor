@@ -41,6 +41,10 @@ from trade_plan_monitor.market_data.models import MinuteBar, ShanghaiDatetime
 from trade_plan_monitor.market_index.canonical import canonical_value
 from trade_plan_monitor.market_index.models import MarketIndexSnapshot
 from trade_plan_monitor.state.market_exception_models import ExceptionCandidateResource
+from trade_plan_monitor.state.source_coverage_values import (
+    BuySuspensionReplacementBinding,
+    BuySuspensionReplacementIntent,
+)
 
 Digest = str
 
@@ -400,6 +404,12 @@ class DailyReviewBinding(DailyValue):
     review_id: str | None
     review_revision: Qty
     plan_version_id: str
+    buy_suspension_replacement_intent: (
+        BuySuspensionReplacementIntent | None
+    ) = Field(default=None, exclude_if=lambda value: value is None)
+    buy_suspension_replacement: (
+        BuySuspensionReplacementBinding | None
+    ) = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def current(self):
@@ -407,6 +417,18 @@ class DailyReviewBinding(DailyValue):
             self.confirmed
         ):
             raise ValueError("review binding is inconsistent")
+        intent = self.buy_suspension_replacement_intent
+        if intent is not None and (intent.candidate_content_hash, intent.source_hash) != (
+                self.content_hash, self.source_hash):
+            raise ValueError("replacement intent differs from this exact review source")
+        receipt = self.buy_suspension_replacement
+        if receipt is not None and (
+                not self.confirmed or intent is None or receipt.intent != intent
+                or (receipt.new_plan_version_id, receipt.new_content_hash, receipt.new_source_hash,
+                    receipt.new_review_id, receipt.new_review_revision) != (
+                    self.plan_version_id, self.content_hash, self.source_hash,
+                    self.review_id, self.review_revision)):
+            raise ValueError("replacement receipt differs from this exact confirmed review")
         return self
 
 
@@ -414,6 +436,17 @@ class DailyHumanSupplementState(DailyValue):
     content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     source: Literal["EXPLICIT_HUMAN_OPERATION"]
     supplements: tuple[DailySupplement, ...]
+    buy_suspension_replacement_intent: (
+        BuySuspensionReplacementIntent | None
+    ) = Field(default=None, exclude_if=lambda value: value is None)
+
+    @model_validator(mode="after")
+    def exact_intent_candidate(self):
+        if (self.buy_suspension_replacement_intent is not None
+                and self.buy_suspension_replacement_intent.candidate_content_hash
+                != self.content_hash):
+            raise ValueError("replacement intent belongs to another supplement candidate")
+        return self
 
 
 def validate_daily_payload(kind, value):

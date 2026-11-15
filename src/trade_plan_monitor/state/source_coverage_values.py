@@ -1,8 +1,9 @@
 """Bounded, self-verifying values for the independent current assurance sidecar."""
 
+from datetime import datetime, timedelta
 from typing import Literal
 
-from pydantic import Field, JsonValue, model_validator
+from pydantic import Field, JsonValue, field_validator, model_validator
 
 from trade_plan_monitor.ai.source_coverage_models import (
     MAX_PROOF_BYTES,
@@ -13,7 +14,8 @@ from trade_plan_monitor.ai.source_coverage_models import (
 )
 from trade_plan_monitor.ai.source_derivation import SourceDerivationEvidence
 from trade_plan_monitor.domain.daily_hash import canonical, daily_hash
-from trade_plan_monitor.domain.daily_plan_models import DailyValue, Identifier
+from trade_plan_monitor.domain.daily_plan_models import DailyValue, Identifier, Text
+from trade_plan_monitor.domain.unified_plan_models import BuySuspensionDefinition
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
 
 
@@ -127,3 +129,84 @@ class CoverageReviewReceipt(_Signed):
     original_review_evidence_hash: Hash
     confirmed_at: ShanghaiDatetime
     authority_granted: Literal[False] = False
+
+
+class BuySuspensionReplacementIntent(DailyValue):
+    """Human source-bound proposal; it carries no predecessor or activation authority."""
+
+    source_hash: Hash
+    candidate_content_hash: Hash
+    source_start: int = Field(strict=True, ge=0, le=150_000)
+    source_end: int = Field(strict=True, gt=0, le=150_000)
+    excerpt: str = Field(min_length=1, max_length=512)
+    replacement_reason: Text
+    retire_predecessor_guard: bool = Field(strict=True)
+    acknowledge_unverified_predecessor: bool = Field(strict=True)
+    strategy_effective_from: ShanghaiDatetime
+    authority_granted: Literal[False] = False
+
+    @field_validator("strategy_effective_from", mode="before")
+    @classmethod
+    def explicit_exchange_start(cls, value):
+        parsed = datetime.fromisoformat(value) if isinstance(value, str) else value
+        if not isinstance(parsed, datetime) or parsed.utcoffset() != timedelta(hours=8):
+            raise ValueError("replacement strategy start must explicitly use +08:00")
+        return value
+
+    @model_validator(mode="after")
+    def exact_span(self):
+        if self.source_end - self.source_start != len(self.excerpt):
+            raise ValueError("replacement intent must bind an exact source span")
+        return self
+
+
+class BuySuspensionReplacementBinding(_Signed):
+    """Bounded reviewed receipt; only the activation writer can apply its decision."""
+
+    version: Literal["buy-suspension-replacement-v1"] = "buy-suspension-replacement-v1"
+    symbol: Identifier
+    predecessor_plan_version_id: Identifier
+    predecessor_plan_id: Identifier
+    predecessor_plan_version: int = Field(strict=True, gt=0, le=9_007_199_254_740_991)
+    predecessor_plan_hash: Hash
+    predecessor_content_hash: Hash
+    predecessor_source_hash: Hash
+    predecessor_review_id: Identifier
+    predecessor_review_revision: int = Field(strict=True, gt=0, le=9_007_199_254_740_991)
+    predecessor_activation_revision: int = Field(strict=True, gt=0, le=9_007_199_254_740_991)
+    predecessor_guard: BuySuspensionDefinition
+    predecessor_state_hash: Hash
+    predecessor_state_revision: int = Field(strict=True, gt=0, le=9_007_199_254_740_991)
+    predecessor_unresolved_from: ShanghaiDatetime | None
+    predecessor_unresolved_through: ShanghaiDatetime | None
+    new_plan_version_id: Identifier
+    new_plan_id: Identifier
+    new_plan_version: int = Field(strict=True, gt=0, le=9_007_199_254_740_991)
+    new_plan_hash: Hash
+    new_content_hash: Hash
+    new_source_hash: Hash
+    new_review_id: Identifier
+    new_review_revision: int = Field(strict=True, gt=0, le=9_007_199_254_740_991)
+    new_guard: BuySuspensionDefinition | None
+    intent: BuySuspensionReplacementIntent
+    confirmed_at: ShanghaiDatetime
+    authority_granted: Literal[False] = False
+
+    @model_validator(mode="after")
+    def exact_replacement(self):
+        if (self.intent.source_hash, self.intent.candidate_content_hash) != (
+                self.new_source_hash, self.new_content_hash):
+            raise ValueError("replacement intent differs from the reviewed new source")
+        if self.predecessor_plan_version_id == self.new_plan_version_id:
+            raise ValueError("replacement must identify a new exact plan version")
+        if self.new_guard is None and not self.intent.retire_predecessor_guard:
+            raise ValueError("omission is not explicit retirement")
+        if self.predecessor_unresolved_from is not None and (
+                not self.intent.acknowledge_unverified_predecessor
+                or self.predecessor_unresolved_through is not None
+                and self.predecessor_unresolved_through < self.predecessor_unresolved_from):
+            raise ValueError("replacement must acknowledge the actual unresolved interval")
+        if self.predecessor_unresolved_from is None and (
+                self.predecessor_unresolved_through is not None):
+            raise ValueError("unresolved interval requires its actual start")
+        return self

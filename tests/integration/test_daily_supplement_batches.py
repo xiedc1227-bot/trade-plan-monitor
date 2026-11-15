@@ -154,3 +154,100 @@ def test_duplicate_version_is_controlled_conflict_and_preserves_saved_document(b
     assert unchanged["contentHash"] == saved["contentHash"]
     assert unchanged["reviewEvidenceHash"] == saved["reviewEvidenceHash"]
     assert unchanged["sourceText"] == SOURCE
+
+
+def _pbs_command(draft, source, mapping, *, revision=0):
+    return dict(candidateJson=daily_draft_json(draft), contentHash=mapping.candidate_content_hash,
+                sourceText=source, supplements=[s.model_dump(mode="json")
+                for s in mapping.supplements], expectedRevision=revision)
+
+
+def test_buy_suspension_registered_clarification_survives_preview_save_and_current_read(
+    batch_chain,
+):
+    from tests.unit.test_plan_buy_suspension_coverage import complete_suspension_case
+
+    from trade_plan_monitor.state.daily_review_store import save_daily_draft
+    from trade_plan_monitor.state.source_coverage_authority import require_current_coverage
+
+    chain = batch_chain
+    draft, source, mapping, obligation = complete_suspension_case(clarified=True)
+    registered = chain.post("plan-review-supplements", _pbs_command(draft, source, mapping))
+    result = chain.post("plan-review-previews", dict(candidateJson=daily_draft_json(draft),
+        sourceText=source, mapping=mapping.model_dump(mode="json")))
+    assert result["supplementRevision"] == registered["revision"] == 1
+    assert result["review"]["issues"] == []
+    with chain.plans._unit_of_work() as work:
+        identity = save_daily_draft(work, draft, mapping=mapping, source_text=source,
+                                   clock=chain.plans._clock)
+        proof = require_current_coverage(work, work.plans.get_version_details(identity))
+        assert proof.assessment.coverage_complete
+        assert next(o for o in proof.assessment.obligations
+                    if o.obligation_id == obligation.obligation_id).state == (
+                        "MAPPED_WITH_REGISTERED_SUPPLEMENT")
+        work.commit()
+    with chain.plans._unit_of_work() as work:
+        assert require_current_coverage(work, work.plans.get_version_details(identity)) == proof
+        assert work.plans.get_active(draft.symbol) is None
+
+
+@pytest.mark.parametrize("attack", ["source", "obligation", "content", "value", "no-source"])
+def test_buy_suspension_registration_rejects_wrong_binding_without_creating_evidence(
+    batch_chain, attack,
+):
+    from tests.unit.test_plan_buy_suspension_coverage import complete_suspension_case
+
+    chain = batch_chain
+    draft, source, mapping, _ = complete_suspension_case(clarified=True)
+    command = _pbs_command(draft, source, mapping)
+    if attack == "no-source":
+        command.pop("sourceText")
+    else:
+        key = {"source": "source_hash", "obligation": "obligation_id",
+               "content": "candidate_content_hash", "value": "value"}[attack]
+        command["supplements"][0][key] = "0" * 64
+    chain.post("plan-review-supplements", command, status=422)
+    assert chain.plans._session_factory is not None
+    with chain.plans._unit_of_work() as work:
+        assert work.daily.list(symbol=draft.symbol, kind="DRAFT") == ()
+
+
+def test_buy_suspension_forged_preview_and_unregistered_save_cannot_create_human_authority(
+    batch_chain,
+):
+    from tests.unit.test_plan_buy_suspension_coverage import complete_suspension_case
+
+    from trade_plan_monitor.state.daily_review_store import save_daily_draft
+
+    chain = batch_chain
+    draft, source, mapping, _ = complete_suspension_case(clarified=True)
+    result = chain.post("plan-review-previews", dict(candidateJson=daily_draft_json(draft),
+        sourceText=source, mapping=mapping.model_dump(mode="json")))
+    assert result["supplementRevision"] == 0
+    assert result["review"]["mapping"]["supplements"] == []
+    assert result["review"]["issues"]
+    with chain.plans._unit_of_work() as work, pytest.raises(ValueError, match="registered"):
+        save_daily_draft(work, draft, mapping=mapping, source_text=source, clock=chain.plans._clock)
+
+
+def test_buy_suspension_changed_source_and_stale_registration_cannot_reuse_approval(batch_chain):
+    from tests.unit.test_plan_buy_suspension_coverage import complete_suspension_case
+
+    from trade_plan_monitor.state.daily_review_store import save_daily_draft
+
+    chain = batch_chain
+    draft, source, mapping, _ = complete_suspension_case(clarified=True)
+    command = _pbs_command(draft, source, mapping)
+    chain.post("plan-review-supplements", command)
+    chain.post("plan-review-supplements", command, status=409)
+    changed = source.replace("24.20后", "24.21后")
+    with chain.plans._unit_of_work() as work, pytest.raises(ValueError):
+        from trade_plan_monitor.ai.daily_review import DailyClause
+        from trade_plan_monitor.ai.review import server_source_clauses
+
+        new_clauses = tuple(DailyClause.model_validate(c.model_dump() | {
+            "disposition": old.disposition, "paths": old.paths, "reason": old.reason,
+            "semantic_role": old.semantic_role,
+        }) for c, old in zip(server_source_clauses(changed), mapping.clauses, strict=True))
+        save_daily_draft(work, draft, mapping=mapping.model_copy(update={"clauses": new_clauses}),
+                         source_text=changed, clock=chain.plans._clock)

@@ -41,6 +41,9 @@ from trade_plan_monitor.ai.source_semantics import (
     relation_groups,
 )
 from trade_plan_monitor.ai.source_treatments import (
+    buy_suspension_coverage,
+    buy_suspension_obligation,
+    buy_suspension_parts,
     deadline_supplement,
     missing_value_supplement,
     source_parts,
@@ -112,7 +115,8 @@ def _cross_control_conflicts(controls, risk_controls):
 
 def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
                    risk_controls: SourceRiskControlAnalysis | None = None,
-                   risk_tables: RiskTableCoverage | None = None):
+                   risk_tables: RiskTableCoverage | None = None,
+                   allow_buy_suspension_clarifications=True):
     """Classify every canonical span using server grammar, not AI background labels."""
     clauses = bounded_clauses(source)
     mapping = _integrity(draft, mapping, clauses)
@@ -159,7 +163,8 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
     groups = relation_groups(parsed, source_hash)
     proven_paths = {}
     obligations, issues = [], []
-    parts = _risk_parts(source, source_parts(source, clauses), all_risks)
+    parts = _risk_parts(source,
+        buy_suspension_parts(source, source_parts(source, clauses)), all_risks)
     base_counts = Counter(row.clause_id for row in parts)
     expanded_counts = Counter()
     atom_cache, total_expanded = {}, 0
@@ -182,6 +187,27 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
         else:
             normalization_hash = normalization.evidence_hash
     for clause in parts:
+        suspension = buy_suspension_obligation(clause, source_hash)
+        if suspension is not None and not clause.excluded and not clause.limited:
+            code, supplements = buy_suspension_coverage(suspension, draft, mapping, parsed,
+                allow_clarifications=allow_buy_suspension_clarifications)
+            if partition_at(partitions, clause.start) == "B":
+                code = "SOURCE_RELATION_MISMATCH"
+            if code is not None:
+                issues.append(CoverageIssue(code=code, path="buy_suspension",
+                    start=clause.start, end=clause.end,
+                    message="The complete persistent BUY obligation needs its exact guard, "
+                            "explicit period/start and source-bound human clarification."))
+            else:
+                paths = tuple(p for p in values if p.startswith("buy_suspension."))
+                suspension = suspension.model_copy(update={
+                    "state": "MAPPED_WITH_REGISTERED_SUPPLEMENT" if supplements else "MAPPED",
+                    "paths": paths,
+                })
+                for path in paths:
+                    proven_paths.setdefault(path, set()).add(clause.clause_id)
+            obligations.append(suspension)
+            continue
         control = None if controls is None else next((row for row in controls.controls
             if row.start <= clause.start < clause.end <= row.end), None)
         risk_control = next((row for row in all_risks
