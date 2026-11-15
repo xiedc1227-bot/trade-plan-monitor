@@ -428,3 +428,25 @@ PBS-T07 复用信号生命周期及 `simulate_inventory` 事务。保护授权�
 T07 原先验证局部工程身份种子。T08 现已在实际继承 owner／废止及 `strategy_effective_from` 解析保护下，开放既有 Schema10 保存／审核／启用流程。运行元数据和当前 predicate 均使用原始保护 owner，同时独立核验当前启用版本／审核。T07 共用夹具现已使用真实启用事务及其事件／审计链。T09 负责就绪，T10 负责生成公共契约，T12 负责最终公共链／浏览器验收。Schema5–9／v12／冻结语义以及原始03/04／PMA证据保持不变；本变更不关闭 F083/C05。
 
 离线证据位于 `build/pbs/t07/`：`test_plan_buy_suspension_enforcement.py` 以及集成文件 `test_plan_buy_suspension_runtime.py`、`test_plan_buy_suspension_authority_wiring.py`、`test_plan_buy_suspension_simulation.py`、`test_plan_buy_suspension_commit_races.py`、`test_plan_buy_suspension_risk_independence.py`。测试使用临时 SQLite、受控时钟及离线 SDK 响应，覆盖两笔批次、待执行信号、实际更正、缓存／target变化、双写事务顺序、直接 API／事务参与者、幂等、回滚及独立风险评估／通知／SELL。provider 调用保持 **0/48**；不操作用户数据库，不发送真实通知。
+
+## U-PBS-current — 确切的公共当前契约集成（2026-11-15）
+
+PBS-T10在PBS-D01–PBS-D06已有授权下记录具体当前API增量。两种契约保留全部既有路径及操作不变。既有能力及编辑器归属增加 `buySuspensionExecutionVersion=condition-plan-v6` 和可选的 `buySuspensionCandidateSchema`，并在 `supportedSchemaVersions` 中加入10。原普通编辑器及基础分派编号仍为Schema5。既有公共保存／读取／预览／审核／启用流程保留Schema10／`condition-plan-v6`规范JSON、全部保护条件／起点字段和完整计划／内容／原文／审核哈希。能够解析或审核候选不授予启用或BUY权限。
+
+确切新增9个组件：`BuySuspensionCoverage`、`BuySuspensionDefinition`、`BuySuspensionDraftDefinition`、`BuySuspensionPriceBasis`、`BuySuspensionReplacementBinding`、`BuySuspensionReplacementIntent`、`BuySuspensionTrigger`、`DailyBuySuspensionState`、`ReadinessBuySuspension`。确切修改10个既有组件：`AxisReadiness`、`ConditionReadiness`、`DailyEditorSchemaView`、`DailyEvaluationApiView`、`DailyReviewPreview`、`DailySupplement`、`DailySupplementCommand`、`ExplicitPlanCapabilityView`、`ReadinessSnapshot`、`RuleReadiness`。其中前17项结构来自T09冻结交接，另外两个能力／编辑器结构补齐当前公共归属。
+
+来源绑定补充字段保留原生命名；公共命令增加可选的 `sourceText` 和 `buySuspensionReplacementIntent`。原先至少一项补充的限制改为运行时要求存在补充或明确注册的接替意图。空输入仍拒绝，不能产生权限。既有运行元数据保留确切的五个保护所有权／修订／target／阻断／被跳过规则字段。就绪结果增加可选的 `snapshot.buySuspension`、逐规则 `BUY_SUSPENDED`，以及原因 `BUY_SUSPENSION_LATCHED`／`STRATEGY_START_NOT_REACHED`。原生状态／定义／接替证据保留原字段名及校验。无保护投影时省略该字段；保留六轴、76个owner、50个叶子、1MiB、监控健康区分及字面量 `authorityGranted=false`。就绪GET不获取数据、不求值、不修复、不写入。
+
+既有手写AI客户端现已精确校验 `plan-extract-v13`／Schema10／`condition-plan-v6` 组合，包括可空的未解决保护输入及明确五分钟起点。客户端保留完整响应及规范草稿JSON，不强制转成旧类型。旧当前提示词仍限Schema5–9；错误组合、旧类型携带保护字段、混入reference-market输入或伪造人工／接替权限均拒绝。公共载体使用 `promptVersion` 和 `draftPlanJson`；`plan-buy-suspension-extraction-v1` 仍为服务端提取／存储封装，不是新增的公共响应字段。默认仍为 `plan-extract-v12`，不修改配置或凭据。当前update-v2继续独立于旧update-v1和公共冻结准备。
+
+精确PBS测试投影验证全部9个新增及10个修改组件的完整字面结构，仅移除逐项列明的增量，恢复旧补充最小数量及能力默认值，再还原四个固定的PBS之前MRD OpenAPI／TypeScript哈希。随后执行未改变的历史MRD／H04／PMA／MLP3链。未知组件、字段、路径、嵌套约束及布尔／数值替换仍可检测，不替换任何历史指纹。每个profile的两个生成文件均与既有生成器一致，并在TypeScript正负编译中保留原生命名、固定版本及false权限字面量。这是在已有授权下的回归证据，不是新增用户签署或策略批准。
+
+Schema10公共冻结导出／准备／回放继续通过原生 `BUY_SUSPENSION_FROZEN_UNSUPPORTED` 或既有封闭DTO校验拒绝。真实已审核工作台读取器及直接冻结运行器分别在创建兼容冻结选择或打开数据集之前拒绝。旧格式manifest、engine、当前selection校验、载荷及哈希保持原样。不降版转换、不扩大冻结联合类型、不新增provider或worker。
+
+可复现证据位于 `build/pbs/t10/`，包括原始失败、隔离临时数据库、确切JSON／哈希往返、真实服务端生成的前端夹具、历史投影、两种生成契约及前端AI／类型检查。T11工作台准入／展示与T12最终浏览器／联合验收保持独立。原始03/04义务、F083/C05及其余PMA门禁仍未完成。provider调用保持 **0/48**；T10不访问用户数据库、不实际获取／发送、不修改配置、不提交或推送。
+
+OpenAPI 快照 SHA-256：`60e1d73b53f5adde383e8a2e17800f6e32fd8da60c4384af75136550d300daed`
+
+安装式监控v2 OpenAPI快照 SHA-256：`ddbeb849f1dcbb1af507818ea0b863ecc62ca991848d6497ac39df5e0170c41d`
+
+生成TypeScript SHA-256：兼容版 `fff0e93d9ab25b8964143b2ab01fc4dd0a6b99b110a559fabaddedf6f6de55d1`；安装式 `435fd1e0f297c0bfe997fb0baabc0e492bf1cbd8a79bfc904d70d56143a55376`。

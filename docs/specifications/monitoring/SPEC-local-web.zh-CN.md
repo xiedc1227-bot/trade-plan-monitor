@@ -2,7 +2,7 @@
 
 ## 当前范围
 
-安装式 `trade-plan-monitor web` 命令绑定 `127.0.0.1`，提供匹配的监控协议 `2` 资源、REST 和 WebSocket。[单一交易计划流程](SPEC-unified-plan.zh-CN.md) 负责 Schema 5 提取、审核、启用和隔离整单模拟。API 读取不可变启动 AI 配置；没有密钥/配置写入或连接测试接口、真实成交登记接口、基本面/事件风险写入接口或独立日线计划工作台。
+安装式 `trade-plan-monitor web` 命令绑定 `127.0.0.1`，提供匹配的监控协议 `2` 资源、REST 和 WebSocket。[单一交易计划流程](SPEC-unified-plan.zh-CN.md) 负责当前Schema5–9及有界的Schema10普通计划持续禁买扩展的提取、审核、启用和隔离整单模拟。Schema10公共冻结准备／导出／回放仍不支持。API 读取不可变启动 AI 配置；没有密钥/配置写入或连接测试接口、真实成交登记接口、基本面/事件风险写入接口或独立日线计划工作台。
 
 ## 路由与权威
 
@@ -15,6 +15,8 @@
 ## 生成契约与构建
 
 `openapi.json` 与 `web/src/api/generated.ts` 从 `create_app` 兼容组装生成。`openapi.runtime-status.json` 与 `web/src/api/generated-runtime-status.ts` 描述安装式 v2 组装。不得手抄或手改生成 Schema；当前批准指纹位于 `SPEC-unified-plan.md`，机器契约是路径清单的权威来源。
+
+该归属文档的U-PBS-current记录两种契约中的确切PBS增量。既有能力及编辑器响应通过 `buySuspensionExecutionVersion` 和 `buySuspensionCandidateSchema` 声明Schema10，普通Schema5编辑器保持原样。计划及提取载体保留规范JSON和完整内容哈希。显式 `plan-extract-v13` 仅接收Schema10／`condition-plan-v6`，默认仍为 `plan-extract-v12`。就绪结果增加可选的 `snapshot.buySuspension` 及逐规则 `BUY_SUSPENDED`，继续区分监控健康与BUY资格，并保留字面量 `authorityGranted=false`。这些只读观察不授予执行权限。既有工作台展示及浏览器验收仍由T11/T12完成。
 
 ```powershell
 python scripts/generate_frontend_types.py --check

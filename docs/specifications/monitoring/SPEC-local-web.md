@@ -2,7 +2,7 @@
 
 ## Current scope
 
-The installed `trade-plan-monitor web` command binds to `127.0.0.1` and serves matching monitor-contract `2` assets, REST and WebSocket. [One Trade Plan Workflow](SPEC-unified-plan.md) owns Schema 5 extraction, review, activation and isolated whole-trade simulation. The API reads immutable startup AI configuration; there are no secret/configuration write or connection-test routes, real-fill registration routes, manual fundamental/event-risk write routes or separate daily-plan workspace.
+The installed `trade-plan-monitor web` command binds to `127.0.0.1` and serves matching monitor-contract `2` assets, REST and WebSocket. [One Trade Plan Workflow](SPEC-unified-plan.md) owns current Schema5–9 and the bounded Schema10 ordinary BUY suspension extension for extraction, review, activation and isolated whole-trade simulation. Schema10 public frozen preparation/export/replay remains unsupported. The API reads immutable startup AI configuration; there are no secret/configuration write or connection-test routes, real-fill registration routes, manual fundamental/event-risk write routes or separate daily-plan workspace.
 
 ## Routes and authority
 
@@ -15,6 +15,8 @@ State-changing services retain idempotency, optimistic revisions and exact sourc
 ## Generated contracts and builds
 
 `openapi.json` and `web/src/api/generated.ts` are generated from `create_app` compatibility assembly. `openapi.runtime-status.json` and `web/src/api/generated-runtime-status.ts` describe the installed v2 assembly. Do not hand-copy or hand-edit generated schemas; current approved fingerprints are in `SPEC-unified-plan.md`, and path inventory is authoritative in the machine contracts.
+
+U-PBS-current in that owner records the exact PBS delta in both profiles. The existing capability and editor responses advertise Schema10 through `buySuspensionExecutionVersion` and `buySuspensionCandidateSchema`; the ordinary Schema5 editor remains unchanged. Plan and extraction carriers retain canonical JSON with complete content hashes. Explicit `plan-extract-v13` admits only Schema10 / `condition-plan-v6`; the default remains `plan-extract-v12`. Readiness adds optional `snapshot.buySuspension` and per-rule `BUY_SUSPENDED`, preserving monitoring health separately from BUY eligibility and literal `authorityGranted=false`. These read observations never authorize execution. Existing workspace rendering and browser acceptance remain T11/T12.
 
 ```powershell
 python scripts/generate_frontend_types.py --check
