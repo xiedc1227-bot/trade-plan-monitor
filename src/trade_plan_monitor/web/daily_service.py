@@ -164,6 +164,7 @@ def mutate_daily(lifecycle, *, operation_name, command, context, request_hash):
                         work,
                         SimulationCommand.model_validate(command.model_dump(mode="python")),
                         now,
+                        buy_suspension_current=lifecycle._buy_suspension_current,
                     )
                 except SimulationAuthorityError as error:
                     _conflict(error.reason)

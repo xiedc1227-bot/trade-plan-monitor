@@ -150,6 +150,9 @@ def create_runtime_lifespan(
                     raise TypeError("plan Web lifecycle must expose its operation service")
                 app.state.plan_web_lifecycle = plan_lifecycle
                 await plan_start()
+                bind_guard = getattr(plan_lifecycle, "bind_buy_suspension_current", None)
+                if callable(bind_guard):
+                    bind_guard(getattr(runtime, "buy_suspension_current", None))
                 app.state.plan_operation_service = plan_lifecycle.operation_service
             if backtest_lifecycle_factory is not None:
                 backtest = LazyBacktestLifecycle(backtest_lifecycle_factory)

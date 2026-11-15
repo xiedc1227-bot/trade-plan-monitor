@@ -796,6 +796,7 @@ class ProductionMonitorPipeline:
             explicit_evaluation_service=self.explicit_evaluations,
             daily_evaluation_service=DailyRuntimeEvaluationService(
                 unit_of_work_factory,
+                buy_suspension_current=self.buy_suspension_current,
                 prepare_inputs=self.prepare_daily_inputs,
                 committed_event_publisher=publisher,
                 committed_result_observer=(

@@ -769,6 +769,17 @@ class DailyRiskEvaluation(DailyValue):
 
 
 class DailyEvaluationState(DailyValue):
+    buy_suspension_owner_plan_version_id: str | None = Field(
+        default=None, exclude_if=lambda v: v is None)
+    buy_suspension_revision: int | None = Field(
+        default=None, gt=0, exclude_if=lambda v: v is None)
+    buy_suspension_target: ShanghaiDatetime | None = Field(
+        default=None, exclude_if=lambda v: v is None)
+    buy_suspension_blocker: Literal[
+        "BUY_SUSPENSION_UNVERIFIED", "BUY_SUSPENSION_LATCHED"] | None = Field(
+        default=None, exclude_if=lambda v: v is None)
+    buy_suspension_skipped_rules: tuple[str, ...] | None = Field(
+        default=None, max_length=2, exclude_if=lambda v: v is None)
     risk_evaluations: tuple[DailyRiskEvaluation, ...] | None = Field(
         default=None, min_length=1, max_length=64, exclude_if=lambda v: v is None)
     risk_births: tuple[DailyRiskBirth, ...] | None = Field(

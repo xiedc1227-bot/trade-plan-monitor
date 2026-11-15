@@ -34,6 +34,7 @@ def confirm_signal(
     _condition_facts=None,
     _fact_owner=None,
     _evaluation_observer=None,
+    buy_suspension_allowed=None,
 ):
     """Optionally observe the actual frozen root without changing admission.
 
@@ -43,6 +44,10 @@ def confirm_signal(
     from trade_plan_monitor.domain.market_linkage_models import MarketLinkedRule
     from trade_plan_monitor.domain.p2_policy_models import P2Rule
 
+    if rule.side == "BUY" and (buy_suspension_allowed is False or (
+        getattr(plan, "buy_suspension", None) is not None and buy_suspension_allowed is not True
+    )):
+        return None
     pretrade = None
     if isinstance(rule, P2Rule):
         from trade_plan_monitor.decision.p2_composition import prepare_p2_rule
@@ -239,13 +244,20 @@ def confirm_signal(
 
 def check_execution(
     plan, signal, *, inventory, quote_fen, evaluated_at, tradable, risk_blocked, risk_known,
-    capital_inputs=None,
+    capital_inputs=None, buy_suspension_allowed=None, buy_suspension_latched=False,
 ):
     remaining = signal["planned_qty"] - signal["simulated_qty"]
     if remaining not in {0, signal["planned_qty"]}:
         raise ValueError("signal consumption must be atomic")
     signal = expire_daily_signal(signal, evaluated_at)
     state, blockers = signal["state"], []
+    if signal["side"] == "BUY" and (buy_suspension_allowed is False or (
+        getattr(plan, "buy_suspension", None) is not None and buy_suspension_allowed is not True
+    )):
+        blockers.append("BUY_SUSPENSION_LATCHED" if buy_suspension_latched
+                        else "BUY_SUSPENSION_UNVERIFIED")
+        if buy_suspension_latched and state != "SIMULATED":
+            state = "INVALIDATED"
     clock = evaluated_at.time().replace(tzinfo=None)
     if state in {"SIMULATED", "INVALIDATED", "EXPIRED"}:
         blockers.append(state)

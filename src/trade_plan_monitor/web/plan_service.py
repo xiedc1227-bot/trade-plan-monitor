@@ -176,6 +176,13 @@ class PersistentPlanWebLifecycle:
         self._engine: Engine | None = None
         self._session_factory: sessionmaker[Session] | None = None
         self._source_coverage_cursor = SourceCoverageCursorCodec()
+        self._buy_suspension_current = None
+
+    def bind_buy_suspension_current(self, current):
+        """Bind only the owning lifespan's runtime reader, never request data."""
+        if current is not None and not callable(current):
+            raise TypeError("buy suspension authority must be callable")
+        self._buy_suspension_current = current
 
     @property
     def operation_service(self) -> PersistentPlanWebLifecycle:

@@ -70,11 +70,13 @@ class CurrentDeliveryAdmission:
         session_factory: Callable[[], Session],
         *,
         runtime_generation: Callable[[], UUID | None],
+        buy_suspension_current=None,
     ) -> None:
         if not callable(session_factory) or not callable(runtime_generation):
             raise TypeError("delivery admission requires callable state and generation readers")
         self._sessions = session_factory
         self._generation = runtime_generation
+        self._buy_suspension_current = buy_suspension_current
 
     def __call__(self, event: NotificationEvent, now: datetime) -> bool:
         observed = _canonical_shanghai(now)
@@ -92,7 +94,8 @@ class CurrentDeliveryAdmission:
             if type(event) is DailyAlertEvent:
                 from trade_plan_monitor.runtime.daily_service import daily_delivery_allowed
 
-                return daily_delivery_allowed(session, event, observed)
+                return daily_delivery_allowed(session, event, observed,
+                    buy_suspension_current=self._buy_suspension_current)
             # Historical event codecs remain readable, but only the current
             # condition-plan family may produce a live channel send.
             return False

@@ -7,7 +7,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from trade_plan_monitor.domain.plan_codec import load_plan_json
 from trade_plan_monitor.state.daily_repository import DailyRepository
 from trade_plan_monitor.state.events import MonitorEventLog
-from trade_plan_monitor.state.repositories import PlanRepository, RepositoryError
+from trade_plan_monitor.state.repositories import (
+    MarketReferenceRepository,
+    PlanRepository,
+    RepositoryError,
+)
 from trade_plan_monitor.state.reviewed_fact_authority import fact_evidence_satisfied
 from trade_plan_monitor.state.source_action_authority import require_source_action_authority
 from trade_plan_monitor.state.source_action_reads import ActionOwnerReader
@@ -23,6 +27,7 @@ def _read_only_identity():
 class _DeliveryWork:
     daily: DailyRepository
     plans: PlanRepository
+    references: MarketReferenceRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +38,7 @@ class DeliverySourceContext:
     plan: object
     review: dict
     basis: object | None
+    work: _DeliveryWork
 
 
 def read_delivery_source(session, event, now):
@@ -47,9 +53,10 @@ def read_delivery_source(session, event, now):
     def clock():
         return now
 
-    work = _DeliveryWork(DailyRepository(session, clock=clock, id_factory=_read_only_identity),
+    work = _DeliveryWork(DailyRepository(session, clock=clock, id_factory=None),
         PlanRepository(session, clock=clock, id_factory=_read_only_identity,
-                       events=MonitorEventLog(session, clock=clock)))
+                       events=MonitorEventLog(session, clock=clock)),
+        MarketReferenceRepository(session))
     try:
         with session.no_autoflush:
             reads = ActionOwnerReader(work)
@@ -128,7 +135,7 @@ def read_delivery_source(session, event, now):
                             owner_kind="ALERT_RULE", owner_id=event.rule_id,
                             plan_version_id=event.plan_version_id):
                         return None
-            return DeliverySourceContext(work.daily, active, details, plan, review, basis)
+            return DeliverySourceContext(work.daily, active, details, plan, review, basis, work)
     except SourceCoverageAuthorityError as error:
         if error.reason == "SOURCE_COVERAGE_INTEGRITY":
             raise SourceCoverageIntegrityError() from None

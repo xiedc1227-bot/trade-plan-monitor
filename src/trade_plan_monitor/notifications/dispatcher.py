@@ -23,7 +23,7 @@ from trade_plan_monitor.notifications.channels import (
     NotificationChannel,
     NotificationEvent,
 )
-from trade_plan_monitor.notifications.daily_models import ObsoleteDailyAlertEvent
+from trade_plan_monitor.notifications.daily_models import DailyAlertEvent, ObsoleteDailyAlertEvent
 from trade_plan_monitor.notifications.outbox import AlertOutbox, OutboxError
 from trade_plan_monitor.state.models import ActivePlan as ActivePlanRow
 from trade_plan_monitor.state.models import AlertEvent as AlertEventRow
@@ -401,7 +401,8 @@ class NotificationDispatcher:
             return None
         # A claim is not a send permit. Recheck committed authority immediately
         # before external I/O, then finish its receipt even during shutdown.
-        if self._admission is not None and not self._event_is_delivery_allowed(
+        guarded_buy = isinstance(event, DailyAlertEvent) and event.signal_type == "BUY"
+        if (self._admission is not None or guarded_buy) and not self._event_is_delivery_allowed(
             event, self._now()
         ):
             return None
@@ -559,7 +560,9 @@ class NotificationDispatcher:
             if type(allowed) is not bool:
                 raise DeliveryStorageError("Alert delivery authority is invalid")
             return allowed
-        if not self._enforce_current_plan:
+        if not self._enforce_current_plan and not (
+            isinstance(event, DailyAlertEvent) and event.signal_type == "BUY"
+        ):
             return True
         allowed: bool | None = None
         try:

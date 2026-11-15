@@ -73,6 +73,43 @@ def _fact_checked_signal(work, plan, signal):
     return signal
 
 
+def _buy_suspension_status(work, plan, now, current, *, expected_revision=None):
+    """Read guard-only admission and native suppression facts; never acquire or write."""
+    try:
+        allowed = (current(work, plan, expected_revision=expected_revision) is True
+                   if callable(current) else plan.schema_version != 10
+                   and getattr(plan, "buy_suspension", None) is None)
+    except ValueError:
+        allowed = False
+    if getattr(plan, "buy_suspension", None) is None and allowed:
+        return True, False, {}
+    active = work.plans.get_active(plan.symbol)
+    owner = None if active is None else active.plan_version_id
+    try:
+        row = None if owner is None else work.daily.get_buy_suspension(
+            symbol=plan.symbol, owner_plan_version_id=owner)
+    except ValueError:
+        row = None
+        allowed = False
+    latched = row is not None and row["state"].outcome == "LATCHED"
+    from trade_plan_monitor.runtime.recovery import buy_suspension_target
+
+    days = work.references.list_trading_days(plan.market, now.date(), now.date())
+    if days and (not days[0].is_open or now.time() < time(9, 30)):
+        days += work.references.list_trading_days(plan.market,
+            days[0].previous_trade_date, days[0].previous_trade_date)
+    target = buy_suspension_target(now, days)
+    facts = {"buy_suspension_owner_plan_version_id": owner,
+             "buy_suspension_revision": None if row is None else row["revision"],
+             "buy_suspension_target": None if target is None else target.isoformat()}
+    if not allowed:
+        facts["buy_suspension_blocker"] = (
+            "BUY_SUSPENSION_LATCHED" if latched else "BUY_SUSPENSION_UNVERIFIED")
+        facts["buy_suspension_skipped_rules"] = [
+            rule.rule_id for rule in plan.ordinary_rules if rule.side == "BUY"]
+    return allowed, latched, facts
+
+
 def _minute_condition_facts(plan, rule, version_id, inputs, facts):
     """Select testimony for this input bucket; recorded SQL still gates actions."""
     selected = [fact for fact in facts if "reviewed_fact_target" not in fact]
@@ -326,6 +363,7 @@ class DailyRuntimeEvaluationService:
         commit_admission=None,
         event_id_factory: Callable[[str], UUID] | None = None,
         _source_authority_reader=None,
+        buy_suspension_current=None,
     ):
         self._work = unit_of_work_factory
         self._prepare = prepare_inputs
@@ -336,6 +374,7 @@ class DailyRuntimeEvaluationService:
         self._event_id = event_id_factory or (lambda _key: uuid4())
         self._source_authority_reader = _source_authority_reader
         self._current_inputs = {}
+        self._buy_suspension_current = buy_suspension_current
 
     def _binding(self, work, plan):
         active = work.plans.get_active(plan.symbol)
@@ -503,10 +542,16 @@ class DailyRuntimeEvaluationService:
             trading_calendar=trading_calendar,
             runtime_generation=data.get("runtime_generation"),
             linked_index=data.get("linked_index_source"),
+            buy_suspension_revision=data.get("buy_suspension_revision"),
         )
-        result = self.run_inputs(
-            plan=plan, inputs=inputs, expected_activation_revision=active.revision
-        )
+        try:
+            result = self.run_inputs(
+                plan=plan, inputs=inputs, expected_activation_revision=active.revision
+            )
+        except DailyActivationChangedError:
+            # The command already committed. Stale local inputs grant no new
+            # action; the next owned acquisition captures a new revision.
+            return None
         if self._publish is not None:
             for identity in result.event_ids:
                 from inspect import isawaitable
@@ -560,6 +605,10 @@ class DailyRuntimeEvaluationService:
                 actual_revision = None if guard is None else guard["revision"]
                 if actual_revision != inputs.buy_suspension_revision:
                     raise DailyActivationChangedError("suspension changed during acquisition")
+            buy_allowed, buy_latched, suspension_facts = _buy_suspension_status(
+                work, plan, max(now, self._clock()) if callable(self._clock) else now,
+                self._buy_suspension_current,
+                expected_revision=inputs.buy_suspension_revision)
             ordinary_eligible = _eligible(plan, now.date()) and not ordinary_authority_ended
             accounting = DailyAccounting(work.daily)
             legacy_reason = None if _alert_only(plan) else accounting.legacy_reason(plan.symbol)
@@ -630,6 +679,9 @@ class DailyRuntimeEvaluationService:
             replay_observation = (self._source_authority_reader is not None
                 and ordinary_source is not None and not risk_source_denied)
             target = {
+                **({"buy_suspension_allowed": buy_allowed,
+                    "buy_suspension_current_target": suspension_facts.get("buy_suspension_target")}
+                   if suspension_facts else {}),
                 **({"buy_suspension_revision": inputs.buy_suspension_revision}
                    if getattr(plan, "buy_suspension", None) is not None else {}),
                 **({"capital_inputs": capital_inputs} if capital_inputs is not None else {}),
@@ -967,6 +1019,8 @@ class DailyRuntimeEvaluationService:
                 if datetime.combine(day, time(15), now.tzinfo) <= now), None)
             if isinstance(plan, MarketLinkedTradePlan) and linked_day is not None:
                 for rule in plan.ordinary_rules:
+                    if rule.side == "BUY" and not buy_allowed:
+                        continue
                     if isinstance(rule, MarketLinkedRule):
                         decision = evaluate_linked(
                             plan,
@@ -1026,6 +1080,7 @@ class DailyRuntimeEvaluationService:
                             {}
                             if not isinstance(plan, UnifiedTradePlan)
                             else {
+                                "buy_suspension_allowed": buy_allowed,
                                 "bars": inputs.five_minute_bars,
                                 "target": inputs.minute_target,
                                 "trading_calendar": inputs.trading_calendar,
@@ -1176,6 +1231,9 @@ class DailyRuntimeEvaluationService:
                     tradable=tradable,
                     risk_blocked=risk_blocked,
                     risk_known=risk_known,
+                    **({"buy_suspension_allowed": buy_allowed,
+                        "buy_suspension_latched": buy_latched}
+                       if isinstance(plan, UnifiedTradePlan) else {}),
                     **({"capital_inputs": capital_inputs} if plan.schema_version == 9 else {}),
                 )
                 if (exception_unknown and checked["state"] not in {
@@ -1266,6 +1324,7 @@ class DailyRuntimeEvaluationService:
             source_diagnostics = dict.fromkeys([
                 *source_blockers, *(row["reason"] for row in risk_source_blockers)])
             snapshot = {
+                **suspension_facts,
                 **({"risk_evaluations": risk_evaluations} if risk_evaluations else {}),
                 **({"risk_births": list(risk_births.values())} if risk_births else {}),
                 **({"ordinary_evaluations": list(ordinary_evaluations.values())}
@@ -1467,16 +1526,17 @@ class DailyRuntimeEvaluationService:
         return str(event.event_id)
 
 
-def daily_delivery_allowed(session, event, now):
+def daily_delivery_allowed(session, event, now, *, buy_suspension_current=None):
     """Recheck actual active binding, latest quantity, window and risk just before send."""
     from trade_plan_monitor.runtime.source_delivery_authority import read_delivery_source
 
     with session.no_autoflush:
         source = read_delivery_source(session, event, now)
-        return source is not None and _daily_delivery_allowed(session, event, now, source)
+        return source is not None and _daily_delivery_allowed(session, event, now, source,
+            buy_suspension_current=buy_suspension_current)
 
 
-def _daily_delivery_allowed(session, event, now, source):
+def _daily_delivery_allowed(session, event, now, source, *, buy_suspension_current=None):
     plan, repo, review = source.plan, source.daily, source.review
     if not isinstance(plan, UnifiedTradePlan):
         return False
@@ -1621,6 +1681,13 @@ def _daily_delivery_allowed(session, event, now, source):
     head = repo.get("evaluation-head-" + event.symbol)
     if head is None or head["payload"]["plan_version_id"] != event.plan_version_id:
         return False
+    if event.signal_type == "BUY":
+        allowed, _, facts = _buy_suspension_status(source.work, plan, now,
+            buy_suspension_current,
+            expected_revision=head["payload"].get("buy_suspension_revision"))
+        if not allowed or facts and facts["buy_suspension_revision"] != head["payload"].get(
+                "buy_suspension_revision"):
+            return False
     from trade_plan_monitor.state.market_linkage_authority import linked_index_current
     if s.get("market_linkage") and not linked_index_current(session, head["payload"], now):
         return False
@@ -1659,6 +1726,7 @@ def _daily_delivery_allowed(session, event, now, source):
         risk_known=head["payload"].get("risk_input_known",
             head["payload"].get("daily_evidence") is not None or not plan.risk_branches),
         **capital_arguments,
+        buy_suspension_allowed=True,
     )
     return checked[
         "executable_qty"

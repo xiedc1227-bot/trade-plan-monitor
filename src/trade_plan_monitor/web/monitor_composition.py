@@ -190,6 +190,7 @@ class MonitorWebComposition:
         market_index_read_service: object | None = None,
         legacy_maintenance_factory: Callable[[], SqlAlchemyUnitOfWork] | None = None,
         daily_reevaluate=None,
+        buy_suspension_current=None,
     ) -> None:
         self._validate_runtime(runtime)
         if runtime_factory is not None and not callable(runtime_factory):
@@ -210,6 +211,7 @@ class MonitorWebComposition:
         self._market_index_read_service = market_index_read_service
         self._legacy_maintenance_factory = legacy_maintenance_factory
         self._daily_reevaluate = daily_reevaluate
+        self._buy_suspension_current = buy_suspension_current
         self._maintenance_lock = asyncio.Lock()
         self._runner_task: asyncio.Task[None] | None = None
         self._start_lock = asyncio.Lock()
@@ -227,6 +229,13 @@ class MonitorWebComposition:
     async def reevaluate_daily(self, version_id):
         if self._daily_reevaluate is not None:
             return await self._daily_reevaluate(version_id)
+
+    def buy_suspension_current(self, work, plan, *, expected_revision=None):
+        """Delegate under the caller's transaction to the presently owned runtime."""
+        if self._stopping or self._stopped or not callable(self._buy_suspension_current):
+            return False
+        return self._buy_suspension_current(work, plan,
+            expected_revision=expected_revision) is True
 
     @property
     def read_service(self) -> object:
@@ -1619,6 +1628,8 @@ def create_monitor_composition(
         current_delivery_admission = CurrentDeliveryAdmission(
             session_factory,
             runtime_generation=lambda: lifecycle.runtime_generation,
+            buy_suspension_current=lambda work, plan, **kwargs:
+                composition.buy_suspension_current(work, plan, **kwargs),
         )
 
         def delivery_admission(event, now) -> bool:
@@ -1734,6 +1745,14 @@ def create_monitor_composition(
             return None
         return await state._pipeline.daily_evaluations.reevaluate_version(version_id)
 
+    def current_buy_suspension(work, plan, *, expected_revision=None):
+        owner = composition._runtime
+        state = runtime_states.get(owner.runtime_generation)
+        if state is None or state._pipeline is None:
+            return False
+        return state._pipeline.buy_suspension_current(work, plan,
+            expected_revision=expected_revision)
+
     composition = MonitorWebComposition(
         runtime=runtime,
         runtime_factory=runtime_factory,
@@ -1754,6 +1773,7 @@ def create_monitor_composition(
         market_index_read_service=market_index_read_service,
         legacy_maintenance_factory=unit_of_work_factory,
         daily_reevaluate=daily_reevaluate,
+        buy_suspension_current=current_buy_suspension,
     )
     health_binding.bind(composition.health)
     return composition

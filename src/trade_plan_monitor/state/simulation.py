@@ -58,6 +58,16 @@ def _reject(reason: str) -> None:
     raise SimulationAuthorityError(reason)
 
 
+def _require_buy_suspension(work, plan, state, now, current):
+    from trade_plan_monitor.runtime.daily_service import _buy_suspension_status
+
+    allowed, latched, facts = _buy_suspension_status(work, plan, now, current,
+        expected_revision=state.get("buy_suspension_revision"))
+    if not allowed or facts and facts["buy_suspension_revision"] != state.get(
+            "buy_suspension_revision"):
+        _reject("BUY_SUSPENSION_LATCHED" if latched else "BUY_SUSPENSION_UNVERIFIED")
+
+
 def simulate_inventory(
     work,
     command: SimulationCommand,
@@ -65,6 +75,7 @@ def simulate_inventory(
     *,
     identity_factory=None,
     _source_authority_reader=None,
+    buy_suspension_current=None,
 ) -> SimulationReceipt:
     """Recheck and write effects in the caller-owned UOW, without committing it."""
     from datetime import time
@@ -147,6 +158,8 @@ def simulate_inventory(
         if error.reason == "SOURCE_COVERAGE_INTEGRITY":
             raise SourceCoverageIntegrityError() from None
         _reject(error.reason)
+    if cause["kind"] == "SIGNAL" and cause["payload"]["side"] == "BUY":
+        _require_buy_suspension(work, plan, state, now, buy_suspension_current)
     if not accounting.evaluation_current(
         state,
         plan_version_id=details.id,
@@ -230,6 +243,7 @@ def simulate_inventory(
                 state.get("daily_evidence") is not None or not plan.risk_branches,
             ),
             **capital_arguments,
+            **({"buy_suspension_allowed": True} if signal["side"] == "BUY" else {}),
         )
         if checked["executable_qty"] == 0 or any(
             "ORDINARY_CONFLICT_BLOCK_BOTH" in s["blockers"] for s in state["signals"]
@@ -264,6 +278,10 @@ def simulate_inventory(
         capital_details = capital
         if capital["mode"] == "OPEN_COST_CAP":
             capital_debit = capital["buy_debit"]["debit_fen"]
+    if side == "BUY":
+        # Keep the final check beside effects: source, target or revision changes
+        # inside the caller's writer cannot reuse the earlier admission.
+        _require_buy_suspension(work, plan, state, now, buy_suspension_current)
     position = accounting.simulate(
         symbol=symbol,
         identity=identity,

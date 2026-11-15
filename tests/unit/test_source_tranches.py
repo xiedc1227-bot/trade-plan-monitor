@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from datetime import datetime, time
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -127,7 +128,8 @@ def test_signal_history_projection_keeps_consumed_predecessor_of_same_side_tranc
     rows = tuple({"id": signal["signal_id"], "payload": signal,
                   "created_at": f"2026-06-0{index + 1}T16:00:00+08:00"}
                  for index, signal in enumerate((first, second)))
-    repository = DailyRepository(None, clock=lambda: None, id_factory=lambda: None)
+    repository = DailyRepository(SimpleNamespace(info={}), clock=lambda: None,
+                                 id_factory=lambda: None)
     monkeypatch.setattr(repository, "iter_records", lambda **kwargs: iter(rows))
 
     retained = repository.current_signals(symbol=plan.symbol)
