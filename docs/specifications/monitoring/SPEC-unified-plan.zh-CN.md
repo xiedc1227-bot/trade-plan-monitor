@@ -407,14 +407,24 @@ T17a25产物落地更新：`76031b3`逐字节写入上述四份候选产物，�
 离线验证入口为 `tests/unit/test_plan_buy_suspension_extraction.py`、`tests/unit/test_plan_buy_suspension_update_extraction.py`、`tests/integration/test_plan_buy_suspension_extraction_route.py` 和 `tests/integration/test_plan_buy_suspension_update_flow.py`。测试使用离线替身覆盖真实有界解析器及已配置HTTP传输、新旧精确准入、原文哈希和缺失值、隔离提取存储、继承证据、确定性派生及冻结拒绝。产物位于 `build/pbs/t03/`；Python异步循环测试需要已授权的localhost执行方式。不需要用户数据库、实际密钥、外部提供方调用或修改用户配置。真实提取调用保持 **0/48**。
 
 
+## U-PBS-activation — 已审核续版与接替（2026-11-15）
+
+PBS-T08 使用既有 `POST /api/v1/plan-review-supplements`、`POST /api/v1/plan-review-previews`、`POST /api/v1/plan-drafts`、`POST /api/v1/plan-review-confirmations` 和 `POST /api/v1/plan-activations`。有限完整的接替／退役行及 `strategy_effective_from = "<explicit +08:00 timestamp>"` 属于强制 BUY 关系。来源覆盖只证明提议；登记意图须匹配 source／content／span／start／retirement，未知尾句和其他强制义务继续阻断。原文改变后，不继承另一来源按内容登记的意图。
+
+审核写入者在标的事务内解析实际启用前序、原始保护 owner 和真实保护状态，再以新审核身份生成 `BuySuspensionReplacementBinding`／`buy-suspension-replacement-v1`。来源证明不依赖尚未生成的凭据。启用在既有写事务内重核来源／审核、启用修订、owner 绑定、定义和状态修订／hash。批准本身不替换活动计划。复制编号、删除保护、选择 Schema5–9 或停用均不能解除继承权限。恢复来源 hash 必须同时不同于已解析 owner 与运行前序的来源。明确退役后的真正无关上下文及其他标的保持隔离。
+
+明确承认的缺少状态以修订0和 `predecessor_state_hash=null` 表示；起点来自原定义，仅当真实日历证明 target 时才填写未核实截止点。已有状态使用真实正修订／hash。目标／generation 变化或停用后，旧 clear 结果不能证明当前覆盖。记录出现或绑定变化使批准失效。旧缺少／未核实／锁存历史不改写为 clear。新保护须完成自身有界补查；明确无保护退役不要求不存在的区间，但 `strategy_effective_from` 仍阻断提前 BUY。账务、已消耗批次、SELL 和独立风险保留各自规则。
+
+`tests/integration/test_plan_buy_suspension_activation.py` 覆盖真实公共登记／预览／保存／审核／启用、多版本继承、停用／恢复、过期批准、新保护补查、退役、承认未核实／缺少状态、来源／缓存篡改、真实双写顺序及已完成交易幂等。证据位于 `build/pbs/t08/`。不新增接口、worker、provider、通用谱系平台或公共冻结支持。T09–T12 仍为独立任务；不关闭 raw03/04 义务、F083/C05 或实际监控就绪。真实 provider 调用保持 **0/48**；不操作用户数据库，不发送真实通知。
+
 ## U-PBS-enforcement — 当前 BUY 提交核验（2026-11-15）
 
 PBS-T07 复用信号生命周期及 `simulate_inventory` 事务。保护授权缺少或拒绝时，`confirm_signal` 在条件求值前跳过 BUY；`check_execution` 将可执行数量设为零，已知锁存还使待执行 BUY 失效。SELL 和独立风险保留各自前提。已完成 `SIMULATED` 消耗、持仓、成本和批次历史不重置、不撤销。受保护计划缺少 `BUY_SUSPENSION` 记录表示未核实，不表示义务不存在。Schema10 即使没有保护字段，也要求运行实例拥有的授权；字段遗漏不能提供接替权限。
 
-既有运行评估可选保留 `buy_suspension_owner_plan_version_id`、`buy_suspension_revision`、`buy_suspension_target`、`buy_suspension_blocker` 和 `buy_suspension_skipped_rules`。阻断值为 `BUY_SUSPENSION_UNVERIFIED` 或 `BUY_SUSPENSION_LATCHED`。本次初始接入的 owner 表示服务端实际选择的当前启用版本；缺少记录时无修订，日历尚未证明的 target 保持 null。被跳过的 BUY 规则不编造条件证据或真假值。原生序列化省略缺省为 null 的字段，保留旧响应。这些事实供后续只读就绪投影使用，不能授权成交。保护授权结果及实际当前 target 与 T06 的捕获修订围栏共同参与运行缓存身份。
+既有运行评估可选保留 `buy_suspension_owner_plan_version_id`、`buy_suspension_revision`、`buy_suspension_target`、`buy_suspension_blocker` 和 `buy_suspension_skipped_rules`。阻断值为 `BUY_SUSPENSION_UNVERIFIED` 或 `BUY_SUSPENSION_LATCHED`。owner 表示从实际启用历史解析的原始保护所有者；缺少记录时无修订，日历尚未证明的 target 保持 null。被跳过的 BUY 规则不编造条件证据或真假值。原生序列化省略缺省为 null 的字段，保留旧响应。这些事实供后续只读就绪投影使用，不能授权成交。保护授权结果及实际当前 target 与 T06 的捕获修订围栏共同参与运行缓存身份。
 
 `ProductionMonitorPipeline.buy_suspension_current(work, plan, expected_revision=...)` 仅核验保护条件，读取实际 SQL／来源、当前时钟 target、generation、定义及审核身份。生产环境将它注入既有运行服务。Web 生命周期把计划服务绑定至当前 composition，每次调用都解析当前拥有的 runtime/pipeline。`POST /api/v1/simulated-trades` 将这个服务端回调传给 `simulate_inventory`；公共命令不增加权限字段。直接调用事务参与者时，受保护 BUY 同样需要该 predicate。在既有 cause／symbol 写事务内，BUY 同时比较当前 predicate 和评估捕获的保护修订，并在记账副作用旁再次核验。缓存 READY、过期请求和并发命令均不能绕过。幂等重放返回已提交收据，不再次成交。命令后的本地重评输入过期时，不返回新结果；不撤销已提交命令，也不把捕获修订替换成新许可。
 
-T07 验证的是局部工程身份种子，不是公共 Schema10 启用。T08 必须把生产 predicate 当前无保护即通过的分支替换为实际继承 owner／废止及 `strategy_effective_from` 解析，包括原文／审核／前序绑定；初始元数据查询在续版时同样须使用该已解析 owner。此前既有启用拒绝保持关闭。T09 负责就绪，T10 负责生成公共契约，T12 负责最终公共链验收。Schema5–9／v12／冻结语义以及原始03/04／PMA证据保持不变；本变更不关闭 F083/C05。
+T07 原先验证局部工程身份种子。T08 现已在实际继承 owner／废止及 `strategy_effective_from` 解析保护下，开放既有 Schema10 保存／审核／启用流程。运行元数据和当前 predicate 均使用原始保护 owner，同时独立核验当前启用版本／审核。T07 共用夹具现已使用真实启用事务及其事件／审计链。T09 负责就绪，T10 负责生成公共契约，T12 负责最终公共链／浏览器验收。Schema5–9／v12／冻结语义以及原始03/04／PMA证据保持不变；本变更不关闭 F083/C05。
 
 离线证据位于 `build/pbs/t07/`：`test_plan_buy_suspension_enforcement.py` 以及集成文件 `test_plan_buy_suspension_runtime.py`、`test_plan_buy_suspension_authority_wiring.py`、`test_plan_buy_suspension_simulation.py`、`test_plan_buy_suspension_commit_races.py`、`test_plan_buy_suspension_risk_independence.py`。测试使用临时 SQLite、受控时钟及离线 SDK 响应，覆盖两笔批次、待执行信号、实际更正、缓存／target变化、双写事务顺序、直接 API／事务参与者、幂等、回滚及独立风险评估／通知／SELL。provider 调用保持 **0/48**；不操作用户数据库，不发送真实通知。

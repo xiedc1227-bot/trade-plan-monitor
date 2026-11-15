@@ -150,9 +150,9 @@ class PositionLot(BaseModel):
 
 ## 计划 BUY 禁买状态（PBS-T05）
 
-`DailyBuySuspensionState` 使用版本 `buy-suspension-state-v1`，是 `kind="BUY_SUSPENSION"` 的私有 `DailyRecord` 载荷。增量迁移 `0030_buy_suspension` 接续 `0029_native_fact_lookup`，仅扩展 `ck_daily_record_kind`。其事务性表复制保留全部旧载荷字节及每个既有索引定义，包括表达式／部分索引。存在任何 BUY 禁买记录时，降级在 DDL 前拒绝；否则空表或仅含旧 kind 的表可以安全恢复前一约束。PBS-T05 在全新和前一版本的隔离 SQLite 数据库中验证真实 `upgrade_database()` 路径。不修改历史迁移，也不打开或升级用户数据库。Schema10 启用仍保持关闭，等待T08已审核接替／启用集成。
+`DailyBuySuspensionState` 使用版本 `buy-suspension-state-v1`，是 `kind="BUY_SUSPENSION"` 的私有 `DailyRecord` 载荷。增量迁移 `0030_buy_suspension` 接续 `0029_native_fact_lookup`，仅扩展 `ck_daily_record_kind`。其事务性表复制保留全部旧载荷字节及每个既有索引定义，包括表达式／部分索引。存在任何 BUY 禁买记录时，降级在 DDL 前拒绝；否则空表或仅含旧 kind 的表可以安全恢复前一约束。PBS-T05 在全新和前一版本的隔离 SQLite 数据库中验证真实 `upgrade_database()` 路径。不修改历史迁移，也不打开或升级用户数据库。T08 现已通过既有启用写入者接入 Schema10 已审核启用。
 
-记录保留原始 `owner_plan_version_id`、`symbol`、`content_hash`、`source_hash`、`review_id`、`birth_activation_revision` 和完整 `BuySuspensionDefinition`。确定性记录 ID 与 `lineage` 绑定原始 owner；重新启用或普通续版不能通过创建替代 owner 重置状态。`DailyRepository.get_buy_suspension(symbol=..., owner_plan_version_id=...)` 无写入地读取真实私有记录、类型化 `state`、外层 `revision` 与计算所得 `state_hash`。此查询不解析前序关系，也不授予启用权限。T08 负责服务端前序解析；缺少状态时必须阻断凭据，不能用虚构成功快照替代。
+记录保留原始 `owner_plan_version_id`、`symbol`、`content_hash`、`source_hash`、`review_id`、`birth_activation_revision` 和完整 `BuySuspensionDefinition`。确定性记录 ID 与 `lineage` 绑定原始 owner；重新启用或普通续版不能通过创建替代 owner 重置状态。`DailyRepository.get_buy_suspension(symbol=..., owner_plan_version_id=...)` 无写入地读取真实私有记录、类型化 `state`、外层 `revision` 与计算所得 `state_hash`。此查询不解析前序关系，也不授予启用权限。T08 解析实际前序及原始 owner。缺少状态阻断 BUY；明确承认未核实状态的接替可用修订0／hash null 绑定实际缺少，不能用虚构成功快照替代。
 
 `transition_buy_suspension` 是时序工程回放及PBS-T06生产采集路径复用的唯一纯转移函数。每个 `BuySuspensionBatch` 最多跨一个日历日期，可以结束于次日零点，并且最多包含 240 个真实分钟身份。确切的交易所日历证据允许闭市日和空区间推进。只有起始不早于 `effective_from`、结束不晚于 `target`、且在 `evaluated_at` 前可取得的完整五分钟 K 线才能触发。收盘必须严格低于 `price_fen`；仅最低价、未完整 K 线或未来数据均不能替代。即使更早存在缺口，有效的已观察跌破也可以锁存，但不能声称它是历史首次跌破。
 
@@ -162,13 +162,19 @@ class PositionLot(BaseModel):
 
 纯reducer及普通陈旧请求不能下调 `target` 或 `evaluated_at`。只有 `DailyRepository.retarget_buy_suspension_calendar` 可在新鲜已提交SQL证明原目标日期闭市、替代目标恰为当前日历证明的前一交易日15:00时，重设已撤销证明且无锁存的目标。它要求覆盖缺少且原因为 `PROOF_INVALIDATED` 或 `CALENDAR_UNVERIFIED`，保留原始起点／所有者，不生成证明。保存重设时再次核对同一SQL条件及确切仓储修订，观察时间不能倒退。生产随后从原起点进行有限有界重检。仅分钟更正、任意更早目标、陈旧修订或已有锁存不能使用该重设。
 
-保存参与方必须在同一事务内，先取得 `DailyRepository.lock_symbol`，再读取、比较和保存，并提供确切的外层 `expected_revision`；复用审计和修订冲突行为。顺序修订测试不代表并发验收。T06现已绑定真实已提交行／日历／基准，接入实际数据写入路径上的事务性失效，并处理重启generation与有界获取。T07 仍负责实际 BUY 和排队通知边界的当前目标／修订屏障。T08 负责普通继承与确切已审核接替启用。仅存储哈希、回放结果或私有读取方法均不能授予 BUY 权限。现有 SIGNAL/RISK 载荷语义、Schema5–9、v12 和公共冻结契约保持不变。
+保存参与方必须在同一事务内，先取得 `DailyRepository.lock_symbol`，再读取、比较和保存，并提供确切的外层 `expected_revision`；复用审计和修订冲突行为。顺序修订测试不代表并发验收。T06现已绑定真实已提交行／日历／基准，接入实际数据写入路径上的事务性失效，并处理重启generation与有界获取。T07 提供实际 BUY 和排队通知边界的当前目标／修订屏障；T08 现已解析其继承 owner，并实现确切已审核接替启用。仅存储哈希、回放结果或私有读取方法均不能授予 BUY 权限。现有 SIGNAL/RISK 载荷语义、Schema5–9、v12 和公共冻结契约保持不变。
 
 隔离定向验证：
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/unit/test_plan_buy_suspension_state.py tests/unit/test_plan_buy_suspension_transition.py tests/unit/test_plan_buy_suspension_chronological_replay.py tests/integration/test_plan_buy_suspension_storage.py -m "not live" -q
 ```
+
+## PBS-T08 启用归属与凭据
+
+`resolve_buy_suspension_context` 复用有界启用事件／审计链、持久指针和既有审核记录。它区分运行前序与原始保护 owner／出生修订，在停用和普通更新后保留归属，拒绝缺少／不一致的归属证据。已知停用原因继续校验；已有孤立保护／历史证据不能变成首次启用。当前运行及待执行 BUY／通知检查使用该原始 owner，不改变旧保护载荷。
+
+`BuySuspensionReplacementBinding`／`buy-suspension-replacement-v1` 绑定前序及 owner、确切新计划／来源／审核、真实状态修订／hash 或实际修订0／hash null 的缺少、退役意图、策略起点和可证明的未核实区间。审核和启用均在既有标的写事务内读取实际状态；启用刷新缓存的来源／审核归属。状态改变、记录出现、时钟 target 或来源证明变化使旧批准失效。已安装凭据保留确切保护／审核身份。来源覆盖的审核影子校验扩展载荷；仅含意图的登记参与新鲜读取。只读 `DailyRepository(..., id_factory=None)` 不替换可写失效参与方。审核不创建保护记录，不清除历史锁存／未知，T06 受控日历重设保持不变。隔离公共链和并发证据位于 `build/pbs/t08/`；不授权操作用户数据库。
 
 ## 代码风格
 
