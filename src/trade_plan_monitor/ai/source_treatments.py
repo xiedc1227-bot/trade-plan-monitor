@@ -21,6 +21,42 @@ class SourcePart:
     limited: bool = False
 
 
+def buy_suspension_replacement_proposal(source):
+    """Finite source proposal only; no runtime predecessor or activation authority."""
+    import json
+    from datetime import datetime, timedelta
+
+    statements = {
+        ("This new plan replaces the predecessor BUY suspension "
+         "and explicitly retires its guard."): True,
+        "本新计划明确接替前序计划的持续禁买义务，并明确废止旧保护条件。": True,
+        "This new plan replaces the predecessor BUY suspension and supplies a new guard.": False,
+        "本新计划明确接替前序计划的持续禁买义务，并采用新保护条件。": False,
+    }
+    proposals, starts, cursor = [], [], 0
+    for raw in source.splitlines(keepends=True):
+        line = raw.rstrip("\r\n")
+        if line in statements:
+            proposals.append(dict(start=cursor, end=cursor + len(line), excerpt=line,
+                                  retire_predecessor_guard=statements[line]))
+        if line.startswith("strategy_effective_from = "):
+            try:
+                value = json.loads(line.removeprefix("strategy_effective_from = "))
+                parsed = datetime.fromisoformat(value)
+                if parsed.utcoffset() != timedelta(hours=8):
+                    raise ValueError("explicit +08:00 required")
+            except (ValueError, TypeError):
+                pass
+            else:
+                starts.append((cursor, cursor + len(line), parsed.isoformat()))
+        cursor += len(raw)
+    if len(proposals) != 1 or len(starts) != 1:
+        return None
+    begin, end, effective = starts[0]
+    return proposals[0] | dict(start_span=(begin, end), strategy_effective_from=effective,
+                              authority_granted=False)
+
+
 def source_parts(source, clauses):
     """Partition from server-owned fragments; unknown remainders retain exact text."""
     result = []

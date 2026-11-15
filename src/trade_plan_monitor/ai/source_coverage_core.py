@@ -121,6 +121,10 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
     clauses = bounded_clauses(source)
     mapping = _integrity(draft, mapping, clauses)
     source_hash = scope_hash(source)
+    from trade_plan_monitor.ai.source_treatments import buy_suspension_replacement_proposal
+
+    proposal = (buy_suspension_replacement_proposal(source)
+                if draft.schema_version == 10 else None)
     if controls is not None:
         controls = SourceControlAnalysis.model_validate_json(controls.model_dump_json())
         if controls.source_hash != source_hash or controls.source_length != len(source) or any(
@@ -187,6 +191,26 @@ def analyze_source(draft, mapping, source, *, normalization=None, controls=None,
         else:
             normalization_hash = normalization.evidence_hash
     for clause in parts:
+        if proposal is not None and not clause.excluded and not clause.limited and any(
+            start <= clause.start < clause.end <= end
+            for start, end in ((proposal["start"], proposal["end"]), proposal["start_span"])
+        ):
+            valid = (partition_at(partitions, clause.start) != "B"
+                     and any(r.side == "BUY" and r.status == "ENABLED"
+                             for r in draft.ordinary_rules)
+                     and (proposal["retire_predecessor_guard"]
+                          or draft.buy_suspension is not None))
+            obligations.append(SourceObligation.build(source_hash=source_hash,
+                clause_id=clause.clause_id, start=clause.start, end=clause.end,
+                excerpt=clause.excerpt, kind="RELATION", scope="BUY",
+                state="MAPPED" if valid else "CONFLICT", paths=(),
+                semantics_json=canonical(dict(treatment="BUY_SUSPENSION_REPLACEMENT_PROPOSAL",
+                                              proposal=proposal))))
+            if not valid:
+                issues.append(CoverageIssue(code="SOURCE_RELATION_MISMATCH",
+                    start=clause.start, end=clause.end,
+                    message="A replacement proposal requires explicit new BUY and guard scope."))
+            continue
         suspension = buy_suspension_obligation(clause, source_hash)
         if suspension is not None and not clause.excluded and not clause.limited:
             code, supplements = buy_suspension_coverage(suspension, draft, mapping, parsed,

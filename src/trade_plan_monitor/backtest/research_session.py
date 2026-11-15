@@ -57,6 +57,18 @@ class _ResearchPlans:
     def get_version_details(self, version_id):
         return self.owner.details if version_id == self.owner.details.id else None
 
+    def _buy_suspension_context(self, work, symbol):
+        """Old private replay only; the issued reader verifies engine and exact manifest."""
+        from trade_plan_monitor.state.activation_history import BuySuspensionContext
+
+        if (self.owner.plan.schema_version not in {5, 6, 7, 8, 9}
+                or getattr(self.owner.plan, "buy_suspension", None) is not None):
+            raise ValueError("BUY_SUSPENSION_FROZEN_UNSUPPORTED")
+        if symbol != self.owner.plan.symbol:
+            raise ValueError("replay symbol differs")
+        basis = self.owner._source_authority_reader(work, self.owner.details.id)
+        return BuySuspensionContext(basis.activation_revision)
+
 
 class _ResearchRuntime(DailyRuntimeEvaluationService):
     def _enqueue(self, *args, **kwargs):

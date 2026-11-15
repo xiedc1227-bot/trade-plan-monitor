@@ -299,7 +299,7 @@ class _LoopSourceAuthority:
                     or basis.activation_revision != event.activation_revision):
                 _reject()
             context = DeliverySourceContext(work.daily, work.plans.get_active(event.symbol),
-                owner.details, owner.plan, review, basis)
+                owner.details, owner.plan, review, basis, work)
             return _daily_delivery_allowed(sql, event, now, context)
 
     @_guarded

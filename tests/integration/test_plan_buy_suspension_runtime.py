@@ -31,10 +31,10 @@ def prepare(chain, *, side="BUY", plan=None, before_guard=None):
         before_guard(chain)
     from tests.integration.test_market_linkage_review import source_mapping
 
+    from trade_plan_monitor.domain.plan_validation import PlanValidationResult
     from trade_plan_monitor.domain.unified_plan_models import BuySuspensionTradePlan
     from trade_plan_monitor.domain.unified_plan_validation import BuySuspensionPlanDraft
     from trade_plan_monitor.state.daily_review_store import confirm_daily_review, save_daily_draft
-    from trade_plan_monitor.state.models import ActivePlan, PlanActivationState, PlanVersion
     from trade_plan_monitor.state.source_coverage_store import SourceCoverageStore
     from trade_plan_monitor.web.routers.plans import PlanReviewConfirmationCommand
 
@@ -57,11 +57,8 @@ def prepare(chain, *, side="BUY", plan=None, before_guard=None):
             coverage_evidence_hash=coverage.assessment.evidence_hash,
             coverage_rules_version=coverage.assessment.rules_version, expected_revision=0),
             clock=lambda: chain.now)
-        # Only the isolated fixture seeds activation. Production Schema10 stays rejected.
-        for model in (ActivePlan, PlanActivationState):
-            active = work.daily.session.get(model, chain.plan.symbol)
-            active.plan_version_id, active.revision = identity, 2
-        work.daily.session.get(PlanVersion, identity).status = "ACTIVE"
+        # T08 opens the real reviewed activation transaction, including event/audit.
+        work.plans.activate(chain.plan, expected_revision=1, validation=PlanValidationResult())
         work.commit()
     chain.version = {"id": identity, "contentHash": reviewed.content_hash,
         "sourceHash": reviewed.source_hash, "reviewEvidenceHash": reviewed.review_evidence_hash}

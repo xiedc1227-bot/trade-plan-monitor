@@ -89,11 +89,19 @@ class ActionOwnerReader:
         self._reject_pending(CoverageReviewRow, plan_version_id=details.id)
         if details.review_id is not None:
             self._reject_pending(CoverageReviewRow, review_id=details.review_id)
-        if details.daily_mapping is not None and details.daily_mapping.supplements:
+        if details.daily_mapping is not None and (
+            details.daily_mapping.supplements
+            or load_daily_draft_json(details.payload_json).schema_version == 10
+        ):
             draft = load_daily_draft_json(details.payload_json)
             identity = daily_hash("daily-human-supplements-v1", dict(
                 symbol=draft.symbol, content_hash=daily_draft_content_sha256(draft)))
-            self._required(DailyRecord, identity)
+            if details.daily_mapping.supplements:
+                self._required(DailyRecord, identity)
+            else:
+                # Intent-only registration still participates in the exact read
+                # snapshot, including pending writes/deletes; absence grants nothing.
+                self._row(DailyRecord, identity)
 
     def active(self, symbol):
         return (None if self._row(ActivePlan, symbol) is None

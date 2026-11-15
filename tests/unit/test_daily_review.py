@@ -294,7 +294,7 @@ def _buy_suspension_replacement_receipt(**updates):
     values["predecessor_guard"] = BuySuspensionDefinition.model_validate(
         values["predecessor_guard"])
     for name in ("predecessor_unresolved_from", "predecessor_unresolved_through", "confirmed_at"):
-        values[name] = datetime.fromisoformat(values[name])
+        values[name] = None if values[name] is None else datetime.fromisoformat(values[name])
     return BuySuspensionReplacementBinding.build(**values)
 
 
@@ -320,6 +320,24 @@ def test_buy_suspension_replacement_receipt_binds_exact_review_and_preserves_unv
                    dict(source_hash="0" * 64), dict(buy_suspension_replacement_intent=None)):
         with pytest.raises(ValidationError):
             DailyReviewBinding.model_validate(payload | update)
+
+
+def test_absent_guard_receipt_is_exact_absence_never_a_fabricated_state():
+    from trade_plan_monitor.state.source_coverage_values import BuySuspensionReplacementBinding
+
+    receipt = _buy_suspension_replacement_receipt(
+        predecessor_state_revision=0, predecessor_state_hash=None,
+        predecessor_unresolved_from="2026-09-30T09:30:00+08:00",
+        predecessor_unresolved_through=None,
+    )
+    assert receipt.predecessor_state_revision == 0 and receipt.predecessor_state_hash is None
+    values = {name: getattr(receipt, name) for name in type(receipt).model_fields
+              if name != "evidence_hash"}
+    for change in (dict(predecessor_state_hash="a" * 64),
+                   dict(predecessor_state_revision=1),
+                   dict(predecessor_unresolved_from=None)):
+        with pytest.raises(ValueError):
+            BuySuspensionReplacementBinding.build(**(values | change))
 
 
 @pytest.mark.parametrize("attack", ["retirement", "acknowledgement", "source", "start"])

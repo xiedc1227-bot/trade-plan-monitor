@@ -184,6 +184,11 @@ async def _preview(command: DailyReviewPreviewCommand, context: MutationContextD
     validate_buy_suspension_clarifications(draft, supplements, command.source_text)
     intent = registered.get("buy_suspension_replacement_intent")
     if intent is not None:
+        from trade_plan_monitor.domain.daily_scope import scope_hash
+
+        if intent["source_hash"] != scope_hash(command.source_text):
+            intent = None
+    if intent is not None:
         intent = BuySuspensionReplacementIntent.model_validate(intent)
         validate_buy_suspension_replacement_intent(draft, intent, command.source_text)
     registered_paths = {s.path for s in supplements}

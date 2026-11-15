@@ -175,8 +175,12 @@ class BuySuspensionReplacementBinding(_Signed):
     predecessor_review_revision: int = Field(strict=True, gt=0, le=9_007_199_254_740_991)
     predecessor_activation_revision: int = Field(strict=True, gt=0, le=9_007_199_254_740_991)
     predecessor_guard: BuySuspensionDefinition
-    predecessor_state_hash: Hash
-    predecessor_state_revision: int = Field(strict=True, gt=0, le=9_007_199_254_740_991)
+    predecessor_guard_owner_plan_version_id: Identifier | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+    predecessor_guard_owner_hash: Hash | None = Field(
+        default=None, exclude_if=lambda value: value is None)
+    predecessor_state_hash: Hash | None
+    predecessor_state_revision: int = Field(strict=True, ge=0, le=9_007_199_254_740_991)
     predecessor_unresolved_from: ShanghaiDatetime | None
     predecessor_unresolved_through: ShanghaiDatetime | None
     new_plan_version_id: Identifier
@@ -194,6 +198,16 @@ class BuySuspensionReplacementBinding(_Signed):
 
     @model_validator(mode="after")
     def exact_replacement(self):
+        if (self.predecessor_state_revision == 0) != (self.predecessor_state_hash is None):
+            raise ValueError("missing state is exactly revision zero and no state hash")
+        if self.predecessor_state_revision == 0 and (
+            not self.intent.acknowledge_unverified_predecessor
+            or self.predecessor_unresolved_from != self.predecessor_guard.effective_from
+        ):
+            raise ValueError("missing predecessor state requires its actual unresolved start")
+        if ((self.predecessor_guard_owner_plan_version_id is None)
+                != (self.predecessor_guard_owner_hash is None)):
+            raise ValueError("original guard owner identity requires its exact binding hash")
         if (self.intent.source_hash, self.intent.candidate_content_hash) != (
                 self.new_source_hash, self.new_content_hash):
             raise ValueError("replacement intent differs from the reviewed new source")

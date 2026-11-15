@@ -191,7 +191,18 @@ def _shadow_matches(reader, details, *, confirmed):
     if row is None or row["kind"] != "REVIEW" or row["symbol"] != details.symbol:
         raise SourceCoverageIntegrityError()
     payload = row["payload"]
-    return payload == dict(confirmed=confirmed, plan_version_id=details.id,
+    from trade_plan_monitor.state.daily_state_models import DailyReviewBinding
+
+    binding = DailyReviewBinding.model_validate(payload)
+    receipt = binding.buy_suspension_replacement
+    if receipt is not None and (
+        receipt.new_plan_id, receipt.new_plan_version, receipt.new_plan_hash, receipt.new_guard,
+    ) != (details.plan_id, details.version, details.plan_hash,
+          load_daily_draft_json(details.payload_json).to_executable().buy_suspension):
+        return False
+    return binding.model_dump(mode="json", exclude={
+        "buy_suspension_replacement_intent", "buy_suspension_replacement",
+    }) == dict(confirmed=confirmed, plan_version_id=details.id,
         content_hash=details.content_hash, source_hash=details.source_hash,
         evidence_hash=details.review_evidence_hash, review_id=details.review_id,
         review_revision=details.review_revision)

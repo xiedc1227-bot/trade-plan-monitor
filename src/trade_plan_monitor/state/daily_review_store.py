@@ -74,6 +74,10 @@ def save_daily_draft(work, draft, *, mapping, source_text, clock, extraction_id=
             raise ValueError("human supplements require a separate registered human operation")
         if registered is not None:
             intent = registered["payload"].get("buy_suspension_replacement_intent")
+            if intent is not None and intent["source_hash"] != snapshot.source_hash:
+                # The registry is content-scoped. Another source does not inherit
+                # its replacement proposal; the actual source must be reviewed anew.
+                intent = None
         if intent is not None:
             from trade_plan_monitor.state.source_coverage_values import (
                 BuySuspensionReplacementIntent,
@@ -279,7 +283,7 @@ def daily_version_details(version, source, review, provenance):
         raise RepositoryError("Stored daily review provenance is invalid") from None
 
 
-def confirm_daily_review(work, command, *, clock):
+def confirm_daily_review(work, command, *, clock, buy_suspension_current=None):
     details = work.plans.get_version_details(str(command.plan_version_id))
     if details is None or details.daily_mapping is None:
         raise ValueError("daily candidate was not found")
@@ -311,6 +315,10 @@ def confirm_daily_review(work, command, *, clock):
     row.review_revision = 1
     row.confirmed_at = clock().isoformat()
     binding = work.daily.get("review-" + details.id)
+    receipt = review_buy_suspension_replacement(work, details,
+        binding["payload"].get("buy_suspension_replacement_intent"),
+        review_id=row.review_id, confirmed_at=datetime.fromisoformat(row.confirmed_at),
+        current=buy_suspension_current)
     work.daily.save(
         binding["id"],
         kind="REVIEW",
@@ -322,9 +330,90 @@ def confirm_daily_review(work, command, *, clock):
             "confirmed": True,
             "review_id": row.review_id,
             "review_revision": 1,
+            **({"buy_suspension_replacement": receipt.model_dump(mode="json")}
+               if receipt is not None else {}),
         },
     )
     work.plans._session.flush()
     confirmed = work.plans.get_version_details(details.id)
     save_coverage_receipt(work, confirmed, coverage)
     return confirmed
+
+
+def review_buy_suspension_replacement(work, details, intent, *, review_id, confirmed_at,
+                                    current=None, observed_at=None):
+    """Build a bounded receipt from actual SQL; no state, trade or activation is changed."""
+    from trade_plan_monitor.ai.source_treatments import buy_suspension_replacement_proposal
+    from trade_plan_monitor.state.activation_history import (
+        guard_owner_hash,
+        resolve_buy_suspension_context,
+        suspension_plan,
+    )
+    from trade_plan_monitor.state.source_coverage_authority import (
+        validate_buy_suspension_replacement_intent,
+    )
+    from trade_plan_monitor.state.source_coverage_values import (
+        BuySuspensionReplacementBinding,
+        BuySuspensionReplacementIntent,
+    )
+
+    context = resolve_buy_suspension_context(work.plans, details.symbol)
+    plan = suspension_plan(details)
+    guard = getattr(plan, "buy_suspension", None)
+    if intent is None:
+        if buy_suspension_replacement_proposal(details.source_text) is not None:
+            raise ValueError("replacement source proposal requires its registered human intent")
+        if context.owner is not None and guard != suspension_plan(context.owner).buy_suspension:
+            raise ValueError("ordinary continuation must retain its original guard and start")
+        return None
+    intent = BuySuspensionReplacementIntent.model_validate(intent)
+    validate_buy_suspension_replacement_intent(load_daily_draft_json(details.payload_json),
+                                              intent, details.source_text)
+    if context.owner is None or context.predecessor is None:
+        raise ValueError("replacement requires a server-resolved actual predecessor guard")
+    old, owner = context.predecessor, context.owner
+    if details.source_hash in {old.source_hash, owner.source_hash}:
+        raise ValueError("replacement requires a new source, not a same-source reimport")
+    definition = suspension_plan(owner).buy_suspension
+    record = work.daily.get_buy_suspension(symbol=details.symbol, owner_plan_version_id=owner.id)
+    unresolved_from, unresolved_through = None, None
+    if record is not None:
+        state = record["state"]
+        if (state.definition, state.content_hash, state.source_hash, state.review_id,
+            state.birth_activation_revision) != (definition, owner.content_hash, owner.source_hash,
+                owner.review_id, context.birth_revision):
+            raise ValueError("guard record differs from its actual original owner")
+    verified = (record is not None and (record["state"].trigger is not None
+        or callable(current) and current(work, suspension_plan(old),
+                                        expected_revision=record["revision"]) is True))
+    if not verified:
+        from datetime import time
+
+        from trade_plan_monitor.runtime.recovery import buy_suspension_target
+
+        observed_at = observed_at or confirmed_at
+        days = work.references.list_trading_days(plan.market,
+            observed_at.date(), observed_at.date())
+        if days and (not days[0].is_open or observed_at.time() < time(9, 30)):
+            days += work.references.list_trading_days(plan.market,
+                days[0].previous_trade_date, days[0].previous_trade_date)
+        unresolved_from = definition.effective_from
+        target = buy_suspension_target(observed_at, days)
+        unresolved_through = target if target is not None and target >= unresolved_from else None
+    return BuySuspensionReplacementBinding.build(symbol=details.symbol,
+        predecessor_plan_version_id=old.id, predecessor_plan_id=old.plan_id,
+        predecessor_plan_version=old.version, predecessor_plan_hash=old.plan_hash,
+        predecessor_content_hash=old.content_hash, predecessor_source_hash=old.source_hash,
+        predecessor_review_id=old.review_id, predecessor_review_revision=old.review_revision,
+        predecessor_activation_revision=context.activation_revision, predecessor_guard=definition,
+        predecessor_guard_owner_plan_version_id=owner.id,
+        predecessor_guard_owner_hash=guard_owner_hash(context),
+        predecessor_state_hash=None if record is None else record["state_hash"],
+        predecessor_state_revision=0 if record is None else record["revision"],
+        predecessor_unresolved_from=unresolved_from,
+        predecessor_unresolved_through=unresolved_through,
+        new_plan_version_id=details.id, new_plan_id=details.plan_id,
+        new_plan_version=details.version, new_plan_hash=details.plan_hash,
+        new_content_hash=details.content_hash, new_source_hash=details.source_hash,
+        new_review_id=review_id, new_review_revision=1, new_guard=guard,
+        intent=intent, confirmed_at=confirmed_at)

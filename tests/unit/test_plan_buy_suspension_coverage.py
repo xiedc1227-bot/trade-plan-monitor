@@ -24,6 +24,73 @@ from trade_plan_monitor.domain.unified_plan_validation import BuySuspensionPlanD
 DIRECTIVE = "再次跌破24.20后继续空仓，等待新底部结构。"
 
 
+def replacement_case(*, retire=True, language="en", tail=""):
+    from trade_plan_monitor.state.source_coverage_values import BuySuspensionReplacementIntent
+
+    raw = suspension_payload()
+    if retire:
+        raw["buy_suspension"] = None
+    draft = BuySuspensionPlanDraft.model_validate(raw)
+    source, mapping = source_mapping(draft)
+    statements = {
+        (True, "en"): ("This new plan replaces the predecessor BUY suspension "
+                       "and explicitly retires its guard."),
+        (False, "en"): ("This new plan replaces the predecessor BUY suspension "
+                        "and supplies a new guard."),
+        (True, "zh"): "本新计划明确接替前序计划的持续禁买义务，并明确废止旧保护条件。",
+        (False, "zh"): "本新计划明确接替前序计划的持续禁买义务，并采用新保护条件。",
+    }
+    statement = statements[retire, language]
+    start = len(source) + 1
+    effective = "2026-10-09T09:30:00+08:00"
+    source += "\n" + statement + '\nstrategy_effective_from = "' + effective + '"' + tail
+    extra = tuple(DailyClause.model_validate(c.model_dump() | dict(
+        disposition="POLICY", paths=("ordinary_rules[0].side",),
+        reason="Mandatory proposed replacement of the BUY obligation; separate approval required",
+    )) for c in server_source_clauses(source)[len(mapping.clauses):])
+    mapping = mapping.model_copy(update={"clauses": (*mapping.clauses, *extra)})
+    intent = BuySuspensionReplacementIntent.model_validate(dict(
+        source_hash=scope_hash(source), candidate_content_hash=daily_draft_content_sha256(draft),
+        source_start=start, source_end=start + len(statement), excerpt=statement,
+        replacement_reason="Explicit new strategy", retire_predecessor_guard=retire,
+        acknowledge_unverified_predecessor=True, strategy_effective_from=effective,
+    ))
+    return draft, source, mapping, intent
+
+
+@pytest.mark.parametrize("retire", [True, False])
+@pytest.mark.parametrize("language", ["en", "zh"])
+def test_complete_replacement_proposal_is_a_buy_relation_not_background(retire, language):
+    from trade_plan_monitor.state.source_coverage_authority import (
+        validate_buy_suspension_replacement_intent,
+    )
+
+    draft, source, mapping, intent = replacement_case(retire=retire, language=language)
+    assert not build_daily_review(draft, mapping, source).issues
+    validate_buy_suspension_replacement_intent(draft, intent, source)
+    result = assess_source_coverage(draft, mapping, source, origin="HUMAN")
+    assert result.coverage_complete, result.issues
+    relations = [o for o in result.obligations if o.start >= intent.source_start]
+    assert relations and all(o.kind == "RELATION" and o.scope == "BUY" for o in relations)
+    assert all(o.state == "MAPPED" for o in relations)
+    assert result.authority_granted is False
+
+
+def test_replacement_proposal_keeps_unknown_tail_and_exact_start_binding():
+    from trade_plan_monitor.state.source_coverage_authority import (
+        validate_buy_suspension_replacement_intent,
+    )
+
+    draft, source, mapping, intent = replacement_case(tail="\nWait for an unspecified extra event.")
+    result = assess_source_coverage(draft, mapping, source, origin="HUMAN")
+    assert not result.coverage_complete and result.obligations[-1].state == "UNRESOLVED"
+    with pytest.raises(ValueError):
+        validate_buy_suspension_replacement_intent(draft,
+            intent.model_copy(update={
+                "strategy_effective_from": intent.strategy_effective_from.replace(hour=10)}),
+            source)
+
+
 def complete_suspension_case(*, substitute=None, clarified=False, guard=True, tail="",
                              directive=DIRECTIVE):
     payload = suspension_payload()

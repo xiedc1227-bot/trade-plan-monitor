@@ -285,7 +285,7 @@ class PlanVersionView(PlanVersionSummary):
             ):
                 raise ValueError("historical plan must remain canonical and explicitly blocked")
             return self
-        if plan.schema_version not in {5, 6, 7, 8, 9}:
+        if plan.schema_version not in {5, 6, 7, 8, 9, 10}:
             raise ValueError("historical plan requires an explicit read-only reason")
         if isinstance(plan, DailyPlanDraft):
             if self.daily_mapping is None:

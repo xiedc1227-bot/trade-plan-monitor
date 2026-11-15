@@ -378,7 +378,7 @@ class PersistentPlanWebLifecycle:
         context: MutationContext,
     ) -> PlanVersionView:
         plan = _load_reviewable_plan(command.plan_json)
-        if plan.schema_version not in {5, 6, 7, 8, 9}:
+        if plan.schema_version not in {5, 6, 7, 8, 9, 10}:
             raise PlanSaveBlockedError(
                 "Historical plan formats are read-only; "
                 "extract the preserved source into a current draft"
@@ -707,12 +707,13 @@ class PersistentPlanWebLifecycle:
             if (
                 details is not None
                 and _load_reviewable_plan(details.payload_json).schema_version
-                not in {5, 6, 7, 8, 9}
+                not in {5, 6, 7, 8, 9, 10}
             ):
                 raise PlanSaveBlockedError("Historical review bindings are read-only")
             if details is not None and details.daily_mapping is not None:
                 try:
-                    record = confirm_daily_review(work, command, clock=self._clock)
+                    record = confirm_daily_review(work, command, clock=self._clock,
+                        buy_suspension_current=self._buy_suspension_current)
                 except SourceCoverageAuthorityError:
                     raise
                 except ValueError as error:
@@ -758,7 +759,7 @@ class PersistentPlanWebLifecycle:
                     "DAILY_DRAFT_OBSOLETE: re-extract preserved source and review a new draft"
                 )
             stored_plan = _load_reviewable_plan(details.payload_json)
-            if stored_plan.schema_version not in {5, 6, 7, 8, 9}:
+            if stored_plan.schema_version not in {5, 6, 7, 8, 9, 10}:
                 raise PlanActivationBlockedError(
                     "Historical plan formats require a new current draft and explicit review"
                 )
@@ -792,6 +793,7 @@ class PersistentPlanWebLifecycle:
                     executable,
                     expected_revision=command.expected_revision,
                     validation=PlanValidationResult(issues=()),
+                    buy_suspension_current=self._buy_suspension_current,
                 )
                 result = _active_plan_view(work.plans.get_activation_state(executable.symbol))
                 complete_replay(work, context=context, request_hash=request_hash, response=result)
@@ -892,7 +894,8 @@ def _plan_version_summary(record: object, *, coverage_issue="SOURCE_COVERAGE_REQ
         obsolete_reason="DAILY_DRAFT_OBSOLETE"
         if any(i.code == "DAILY_DRAFT_OBSOLETE" for i in details.daily_issues)
         else "LEGACY_PLANS_REQUIRE_REVIEW"
-        if not can_activate and _plan is not None and _plan.schema_version not in {5, 6, 7, 8, 9}
+        if (not can_activate and _plan is not None
+            and _plan.schema_version not in {5, 6, 7, 8, 9, 10})
         else None,
         revision=details.revision,
         created_at=_shanghai_datetime(details.created_at),
@@ -923,7 +926,7 @@ def _plan_version_view(record: object, *, coverage_issue="SOURCE_COVERAGE_REQUIR
         obsolete_reason="DAILY_DRAFT_OBSOLETE"
         if any(i.code == "DAILY_DRAFT_OBSOLETE" for i in details.daily_issues)
         else "LEGACY_PLANS_REQUIRE_REVIEW"
-        if plan is not None and plan.schema_version not in {5, 6, 7, 8, 9}
+        if plan is not None and plan.schema_version not in {5, 6, 7, 8, 9, 10}
         else None,
         revision=details.revision,
         created_at=_shanghai_datetime(details.created_at),
@@ -971,7 +974,7 @@ def _validated_plan_state(
         )
         return None, validation, False
     plan = _validated_persisted_plan(details)
-    if plan.schema_version not in {5, 6, 7, 8, 9}:
+    if plan.schema_version not in {5, 6, 7, 8, 9, 10}:
         return (
             plan,
             PlanValidationResult(

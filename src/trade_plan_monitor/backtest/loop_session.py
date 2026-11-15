@@ -20,7 +20,7 @@ from trade_plan_monitor.backtest.p3_replay import CapitalReplayState
 from trade_plan_monitor.backtest.plan_schedule import require_loop_timestamp
 from trade_plan_monitor.backtest.reminder_capture import CAPTURE_METADATA, ReminderCapture
 from trade_plan_monitor.domain.daily_hash import daily_hash
-from trade_plan_monitor.domain.plan_codec import dump_plan_json
+from trade_plan_monitor.domain.plan_codec import dump_plan_json, load_plan_json
 from trade_plan_monitor.domain.plan_validation import PlanValidationResult
 from trade_plan_monitor.notifications.outbox import AlertNotFoundError
 from trade_plan_monitor.runtime.daily_service import (
@@ -58,14 +58,28 @@ class _LoopVersionDetails:
 class _LoopPlans:
     """Frozen review adapter; active binding remains in the actual private database."""
 
-    def __init__(self, plans, details):
+    def __init__(self, plans, details, source_authority_reader=None):
         self.plans, self.details = plans, details
+        self._source_authority_reader = source_authority_reader
 
     def get_active(self, symbol):
         return self.plans.get_active(symbol)
 
     def get_version_details(self, version_id):
         return self.details if version_id == self.details.id else None
+
+    def _buy_suspension_context(self, work, symbol):
+        """Old private replay only, validated by the actual issued manifest reader."""
+        from trade_plan_monitor.state.activation_history import BuySuspensionContext
+
+        plan = load_plan_json(self.details.payload_json)
+        if (plan.schema_version not in {5, 6, 7, 8, 9}
+                or getattr(plan, "buy_suspension", None) is not None):
+            raise ValueError("BUY_SUSPENSION_FROZEN_UNSUPPORTED")
+        if symbol != plan.symbol or self._source_authority_reader is None:
+            raise ValueError("replay owner is unavailable")
+        basis = self._source_authority_reader(work, self.details.id)
+        return BuySuspensionContext(basis.activation_revision)
 
 
 class _LoopActivationPlans(PlanRepository):
@@ -80,6 +94,15 @@ class _LoopActivationPlans(PlanRepository):
         if self._source_authority_reader is None:
             return super()._require_source_review(target_id)
         self._source_authority_reader.require_activation(self._session, target_id)
+
+    def _require_buy_suspension_activation(self, version_id, *, current):
+        # The existing frozen selector admits only old contracts and a fresh
+        # private engine. It never imports a live inherited guard or Schema10.
+        if (self.plan.schema_version not in {5, 6, 7, 8, 9}
+                or getattr(self.plan, "buy_suspension", None) is not None
+                or self._source_authority_reader is None):
+            raise ValueError("BUY_SUSPENSION_FROZEN_UNSUPPORTED")
+        self._source_authority_reader.require_activation(self._session, version_id)
 
     def get_version(self, plan_id, version):
         if (plan_id, version) != (self.plan.plan_id, self.plan.version):
@@ -188,7 +211,8 @@ class LoopSession:
                     events=work.events, plan=self.plan, storage_plan_id=self.details.id,
                     source_authority_reader=getattr(self, "_source_authority_reader", None),
                 )
-            work._plans = _LoopPlans(plans, self.details)
+            work._plans = _LoopPlans(plans, self.details,
+                getattr(self, "_source_authority_reader", None))
             yield work
 
     def _seed(self, calendar):

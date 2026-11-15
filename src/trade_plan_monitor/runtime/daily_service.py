@@ -75,16 +75,28 @@ def _fact_checked_signal(work, plan, signal):
 
 def _buy_suspension_status(work, plan, now, current, *, expected_revision=None):
     """Read guard-only admission and native suppression facts; never acquire or write."""
+    from trade_plan_monitor.state.activation_history import (
+        resolve_buy_suspension_context,
+        suspension_plan,
+    )
+
+    context = None
     try:
+        context = resolve_buy_suspension_context(work.plans, plan.symbol, work=work)
+        if context.owner is not None and getattr(plan, "buy_suspension", None) != (
+                suspension_plan(context.owner).buy_suspension):
+            raise ValueError("active policy dropped or changed its inherited guard")
         allowed = (current(work, plan, expected_revision=expected_revision) is True
                    if callable(current) else plan.schema_version != 10
                    and getattr(plan, "buy_suspension", None) is None)
+        if (context.strategy_effective_from is not None
+                and now < context.strategy_effective_from):
+            allowed = False
     except ValueError:
         allowed = False
     if getattr(plan, "buy_suspension", None) is None and allowed:
         return True, False, {}
-    active = work.plans.get_active(plan.symbol)
-    owner = None if active is None else active.plan_version_id
+    owner = None if context is None or context.owner is None else context.owner.id
     try:
         row = None if owner is None else work.daily.get_buy_suspension(
             symbol=plan.symbol, owner_plan_version_id=owner)
@@ -598,8 +610,13 @@ class DailyRuntimeEvaluationService:
             ):
                 raise DailyActivationChangedError("daily activation changed during acquisition")
             if getattr(plan, "buy_suspension", None) is not None:
+                from trade_plan_monitor.state.activation_history import (
+                    resolve_buy_suspension_context,
+                )
+
+                context = resolve_buy_suspension_context(work.plans, plan.symbol)
                 guard = work.daily.get_buy_suspension(symbol=plan.symbol,
-                    owner_plan_version_id=active.plan_version_id)
+                    owner_plan_version_id=context.owner.id) if context.owner is not None else None
                 # Absence captured as absence is unverified, not a whole-cycle
                 # failure. A real revision change still fences stale inputs.
                 actual_revision = None if guard is None else guard["revision"]

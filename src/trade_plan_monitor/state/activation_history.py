@@ -128,10 +128,11 @@ def read_activation_history(session: Session, symbol: str) -> tuple[ActivationBo
     for audit in audits:
         _require(len(audit.details_json) <= 4096)
         details = json.loads(audit.details_json)
-        _require(
-            isinstance(details, dict)
-            and set(details) == {"symbol", "revision", "planVersionId"}
-        )
+        _require(isinstance(details, dict) and (
+            set(details) == {"symbol", "revision", "planVersionId"}
+            or audit.action == "PLAN_DEACTIVATED"
+            and set(details) == {"symbol", "revision", "planVersionId", "cause"}
+            and details["cause"] in {"OUTAGE_OVER_120_HOURS", "MANUAL_LEGACY_INVALIDATION"}))
         revision = details["revision"]
         _require(
             type(revision) is int
@@ -196,3 +197,124 @@ def read_activation_history(session: Session, symbol: str) -> tuple[ActivationBo
             and active.activated_at == tip.changed_at
         )
     return tuple(history)
+
+
+@dataclass(frozen=True, slots=True)
+class BuySuspensionContext:
+    """Actual activation predecessor and original guard owner, within one SQL snapshot."""
+
+    activation_revision: int
+    predecessor: object | None = None
+    owner: object | None = None
+    birth_revision: int | None = None
+    strategy_effective_from: datetime | None = None
+
+
+def suspension_plan(details):
+    from trade_plan_monitor.domain.daily_plan_validation import load_daily_draft_json
+    from trade_plan_monitor.domain.plan_codec import load_plan_json
+
+    return (load_daily_draft_json(details.payload_json).to_executable()
+            if details.daily_mapping is not None else load_plan_json(details.payload_json))
+
+
+def guard_owner_hash(context):
+    from trade_plan_monitor.domain.daily_hash import daily_hash
+
+    owner = context.owner
+    return daily_hash("buy-suspension-owner-binding-v1", dict(
+        id=owner.id, plan_hash=owner.plan_hash, content_hash=owner.content_hash,
+        source_hash=owner.source_hash, review_id=owner.review_id,
+        review_revision=owner.review_revision, birth_revision=context.birth_revision,
+        definition=suspension_plan(owner).buy_suspension.model_dump(mode="json")))
+
+
+def resolve_buy_suspension_context(repo, symbol, *, work=None):
+    """Follow only the bounded actual activation chain; never source independence flags.
+
+    Deactivation preserves the last selected owner. A verified installed replacement
+    starts a new context; old dormant/unrelated records are not scanned as global bans.
+    The caller owns its transaction and, for mutations, the existing symbol writer.
+    """
+    from trade_plan_monitor.state.daily_models import DailyRecord
+    from trade_plan_monitor.state.daily_repository import DailyRepository
+    from trade_plan_monitor.state.daily_state_models import DailyReviewBinding
+
+    if not hasattr(repo, "_session"):
+        adapter = getattr(repo, "_buy_suspension_context", None)
+        _require(work is not None and callable(adapter))
+        context = adapter(work, symbol)
+        _require(isinstance(context, BuySuspensionContext) and context.owner is None
+                 and context.strategy_effective_from is None)
+        return context
+    session = repo._session
+    with session.no_autoflush:
+        _require(not any(isinstance(row, (ActivePlan, PlanActivationState))
+            and row.symbol == symbol for row in (*session.new, *session.dirty, *session.deleted)))
+        state = session.scalar(select(PlanActivationState).where(
+            PlanActivationState.symbol == symbol).execution_options(populate_existing=True))
+        active = session.scalar(select(ActivePlan).where(
+            ActivePlan.symbol == symbol).execution_options(populate_existing=True))
+        if state is None or state.revision == 0:
+            _require(active is None)
+            _require(session.scalar(monitor_query().where(MonitorRow.aggregate_id == symbol,
+                MonitorRow.event_type.in_([item.value for item in _BOUNDARIES])).limit(1)) is None)
+            _require(session.scalar(select(DailyRecord.id).where(DailyRecord.symbol == symbol,
+                DailyRecord.kind == "BUY_SUSPENSION").limit(1)) is None)
+            return BuySuspensionContext(0)
+        read_monitor_highwater(session)
+        history = read_activation_history(session, symbol)
+        context = BuySuspensionContext(0)
+        daily = DailyRepository(session, clock=repo._clock, id_factory=None)
+        for boundary in history:
+            if boundary.plan_version_id is None:
+                context = BuySuspensionContext(boundary.revision, context.predecessor,
+                    context.owner, context.birth_revision, context.strategy_effective_from)
+                continue
+            details = repo.get_version_details(boundary.plan_version_id)
+            _require(details is not None and details.symbol == symbol)
+            plan = suspension_plan(details)
+            _require(plan is not None)
+            guard = getattr(plan, "buy_suspension", None)
+            raw = daily.get("review-" + details.id)
+            review = None if raw is None else DailyReviewBinding.model_validate(raw["payload"])
+            receipt = None if review is None else review.buy_suspension_replacement
+            if guard is not None or receipt is not None:
+                _require(review is not None and review.confirmed)
+                _require((review.plan_version_id, review.content_hash, review.source_hash,
+                    review.evidence_hash, review.review_id, review.review_revision) == (
+                    details.id, details.content_hash, details.source_hash,
+                    details.review_evidence_hash, details.review_id, details.review_revision))
+            repeated = context.predecessor is not None and context.predecessor.id == details.id
+            if receipt is not None and not repeated:
+                old = context.predecessor
+                _require(old is not None and context.owner is not None)
+                _require((receipt.predecessor_plan_version_id, receipt.predecessor_plan_hash,
+                    receipt.predecessor_content_hash, receipt.predecessor_source_hash,
+                    receipt.predecessor_review_id, receipt.predecessor_review_revision,
+                    receipt.predecessor_activation_revision,
+                    receipt.predecessor_guard_owner_plan_version_id,
+                    receipt.predecessor_guard_owner_hash, receipt.new_plan_hash,
+                    receipt.new_guard, receipt.predecessor_guard,
+                    receipt.predecessor_plan_id, receipt.predecessor_plan_version,
+                    receipt.new_plan_id, receipt.new_plan_version, receipt.confirmed_at,
+                    ) == (old.id, old.plan_hash, old.content_hash,
+                    old.source_hash, old.review_id, old.review_revision,
+                    context.activation_revision,
+                    context.owner.id, guard_owner_hash(context), details.plan_hash, guard,
+                    suspension_plan(context.owner).buy_suspension, old.plan_id, old.version,
+                    details.plan_id, details.version, details.review_confirmed_at))
+                context = BuySuspensionContext(boundary.revision, details,
+                    details if guard is not None else None,
+                    boundary.revision if guard is not None else None,
+                    receipt.intent.strategy_effective_from)
+            elif context.owner is not None:
+                _require(guard == suspension_plan(context.owner).buy_suspension)
+                context = BuySuspensionContext(boundary.revision, details, context.owner,
+                    context.birth_revision, context.strategy_effective_from)
+            else:
+                context = BuySuspensionContext(boundary.revision, details,
+                    details if guard is not None else None,
+                    boundary.revision if guard is not None else None,
+                    context.strategy_effective_from)
+        return context

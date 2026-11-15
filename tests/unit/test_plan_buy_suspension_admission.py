@@ -47,13 +47,13 @@ def test_frozen_schedule_export_rejects_native_schema10(scheduled):
             version(plan=plan)
 
 
-def test_repository_rejects_new_contract_before_any_activation_authority_is_assumed(tmp_path):
+def test_repository_requires_actual_saved_new_contract_before_activation(tmp_path):
     from trade_plan_monitor.state.database import (
         create_session_factory,
         create_sqlite_engine,
         upgrade_database,
     )
-    from trade_plan_monitor.state.repositories import PlanActivationBlockedError
+    from trade_plan_monitor.state.repositories import PlanVersionNotFoundError
     from trade_plan_monitor.state.unit_of_work import SqlAlchemyUnitOfWork
 
     engine = create_sqlite_engine(tmp_path / "admission.sqlite")
@@ -62,7 +62,7 @@ def test_repository_rejects_new_contract_before_any_activation_authority_is_assu
         with SqlAlchemyUnitOfWork(create_session_factory(engine)) as work:
             plan = BuySuspensionTradePlan.model_validate(suspension_payload())
             with pytest.raises(
-                PlanActivationBlockedError, match="BUY_SUSPENSION_ACTIVATION_UNSUPPORTED",
+                PlanVersionNotFoundError, match="Plan version was not found",
             ):
                 work.plans.activate(plan, expected_revision=0, validation=PlanValidationResult())
             assert work.plans.get_active(plan.symbol) is None
@@ -70,23 +70,42 @@ def test_repository_rejects_new_contract_before_any_activation_authority_is_assu
         engine.dispose()
 
 
-def test_public_lifecycle_existing_allowlist_rejects_new_schema(tmp_path):
+def test_public_lifecycle_new_schema_still_requires_exact_source_mapping(tmp_path):
     import asyncio
     from uuid import uuid4
 
-    from trade_plan_monitor.state.repositories import PlanSaveBlockedError
+    from trade_plan_monitor.web.errors import ApiError, ApiErrorCode
     from trade_plan_monitor.web.plan_service import PersistentPlanWebLifecycle
     from trade_plan_monitor.web.routers.plans import PlanDraftCommand
     from trade_plan_monitor.web.schemas import MutationContext
 
-    # The public import gate runs before persistence or review can grant activation.
     lifecycle = PersistentPlanWebLifecycle(database_path=tmp_path / "public.sqlite")
     draft = BuySuspensionPlanDraft.model_validate(suspension_payload())
-    with pytest.raises(PlanSaveBlockedError):
-        asyncio.run(lifecycle.save_plan_draft(
-            command=PlanDraftCommand(
-                plan_json=draft.model_dump_json(), source_text="Synthetic guard admission fixture",
-                expected_revision=0,
-            ),
-            context=MutationContext(request_id=uuid4().hex, idempotency_key=str(uuid4())),
-        ))
+
+    async def scenario():
+        await lifecycle.start()
+        try:
+            with pytest.raises(ApiError) as blocked:
+                await lifecycle.save_plan_draft(
+                    command=PlanDraftCommand(plan_json=draft.model_dump_json(),
+                        source_text="Synthetic guard admission fixture", expected_revision=0),
+                    context=MutationContext(request_id=uuid4().hex, idempotency_key=str(uuid4())))
+            assert blocked.value.code == ApiErrorCode.VALIDATION_ERROR
+        finally:
+            await lifecycle.stop()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("kind", ["research", "loop"])
+def test_private_legacy_context_adapter_never_accepts_schema10(kind):
+    from types import SimpleNamespace
+
+    from trade_plan_monitor.backtest.loop_session import _LoopPlans
+    from trade_plan_monitor.backtest.research_session import _ResearchPlans
+
+    plan = BuySuspensionTradePlan.model_validate(suspension_payload())
+    adapter = (_ResearchPlans(SimpleNamespace(plan=plan)) if kind == "research"
+        else _LoopPlans(None, SimpleNamespace(payload_json=plan.model_dump_json())))
+    with pytest.raises(ValueError, match="BUY_SUSPENSION_FROZEN_UNSUPPORTED"):
+        adapter._buy_suspension_context(None, plan.symbol)

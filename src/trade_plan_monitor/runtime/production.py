@@ -4474,16 +4474,30 @@ class ProductionMonitorPipeline:
         projection. It grants no trade permission or other prerequisite.
         """
         from trade_plan_monitor.runtime.recovery import buy_suspension_target
+        from trade_plan_monitor.state.activation_history import (
+            resolve_buy_suspension_context,
+        )
 
+        if work.plans.get_active(plan.symbol) is None:
+            return False
+        active, binding = self.daily_evaluations._binding(work, plan)
+        context = resolve_buy_suspension_context(work.plans, plan.symbol)
+        now = self._clock.now()
+        if (context.predecessor is None or context.predecessor.id != active.plan_version_id
+                or context.strategy_effective_from is not None
+                and now < context.strategy_effective_from):
+            return False
         if getattr(plan, "buy_suspension", None) is None:
-            return True
+            return context.owner is None
         if (not self._decision_commit_current() or buy_suspension_source_identity(
                 getattr(self.provider._client, "_client", None), self._endpoint) is None):
             return False
-        active, binding = self.daily_evaluations._binding(work, plan)
+        if context.owner is None:
+            return False
+        owner = context.owner
         try:
             row = work.daily.get_buy_suspension(symbol=plan.symbol,
-                owner_plan_version_id=active.plan_version_id)
+                owner_plan_version_id=owner.id)
         except ValueError:
             return False  # Corrupt/future guard evidence cannot authorize BUY.
         if row is None or expected_revision is not None and row["revision"] != expected_revision:
@@ -4499,7 +4513,8 @@ class ProductionMonitorPipeline:
             and state.evaluated_at <= now
             and state.definition == plan.buy_suspension
             and (state.content_hash, state.source_hash, state.review_id)
-                == (binding["content_hash"], binding["source_hash"], binding["review_id"])
+                == (owner.content_hash, owner.source_hash, owner.review_id)
+            and state.birth_activation_revision == context.birth_revision
             and state.coverage.generation == self.suspension_generation())
 
     def _accept_suspension_factors(self, symbol, start, end, factors, received):
@@ -4566,6 +4581,7 @@ class ProductionMonitorPipeline:
         current reviewed version is the original owner; no client-selected owner.
         """
         from trade_plan_monitor.runtime.recovery import buy_suspension_target
+        from trade_plan_monitor.state.activation_history import resolve_buy_suspension_context
         from trade_plan_monitor.state.daily_repository import buy_suspension_record_id
         from trade_plan_monitor.state.daily_state_models import (
             BuySuspensionPriceBasis,
@@ -4607,9 +4623,13 @@ class ProductionMonitorPipeline:
         with self._work() as work:
             work.daily.lock_symbol(plan.symbol)
             active, binding = self.daily_evaluations._binding(work, plan)
-            identity = buy_suspension_record_id(plan.symbol, active.plan_version_id)
+            context = resolve_buy_suspension_context(work.plans, plan.symbol)
+            owner = context.owner
+            if owner is None:
+                raise RecoveryAdmissionChangedError("suspension has no actual original owner")
+            identity = buy_suspension_record_id(plan.symbol, owner.id)
             row = work.daily.get_buy_suspension(symbol=plan.symbol,
-                owner_plan_version_id=active.plan_version_id)
+                owner_plan_version_id=owner.id)
             if row is not None and row["state"].trigger is not None:
                 return row  # Do not heartbeat immutable breach/replacement review identities.
             if row is None and target is None:
@@ -4617,13 +4637,13 @@ class ProductionMonitorPipeline:
                 # could permanently outrun the eventual completed-session target.
                 return None
             state = (row["state"] if row else DailyBuySuspensionState(
-                symbol=plan.symbol, owner_plan_version_id=active.plan_version_id,
-                content_hash=binding["content_hash"], source_hash=binding["source_hash"],
-                review_id=binding["review_id"], birth_activation_revision=active.revision,
+                symbol=plan.symbol, owner_plan_version_id=owner.id,
+                content_hash=owner.content_hash, source_hash=owner.source_hash,
+                review_id=owner.review_id, birth_activation_revision=context.birth_revision,
                 definition=plan.buy_suspension, target=target, evaluated_at=now))
             if (state.definition != plan.buy_suspension
-                    or state.content_hash != binding["content_hash"]
-                    or state.review_id != binding["review_id"]):
+                    or state.content_hash != owner.content_hash
+                    or state.review_id != owner.review_id):
                 raise RecoveryAdmissionChangedError("suspension original owner changed")
             retargeted = (None if target is None or target >= state.target else
                 work.daily.retarget_buy_suspension_calendar(
@@ -4640,13 +4660,13 @@ class ProductionMonitorPipeline:
             if row is None or changed.model_dump(exclude={"evaluated_at"}) != state.model_dump(
                     exclude={"evaluated_at"}):
                 work.daily.save(identity, kind="BUY_SUSPENSION", symbol=plan.symbol,
-                    lineage=active.plan_version_id, payload=changed.model_dump(mode="json"),
+                    lineage=owner.id, payload=changed.model_dump(mode="json"),
                     expected_revision=0 if row is None else row["revision"])
             if not current():
                 raise RecoveryAdmissionChangedError("suspension source changed before commit")
             work.commit()
             row = work.daily.get_buy_suspension(symbol=plan.symbol,
-                owner_plan_version_id=active.plan_version_id)
+                owner_plan_version_id=owner.id)
         state = row["state"]
         if target is None or target < state.target or target < state.definition.effective_from:
             return row
@@ -4699,7 +4719,7 @@ class ProductionMonitorPipeline:
             work.daily.lock_symbol(plan.symbol)
             latest_active, latest_binding = self.daily_evaluations._binding(work, plan)
             fresh = work.daily.get_buy_suspension(symbol=plan.symbol,
-                owner_plan_version_id=active.plan_version_id)
+                owner_plan_version_id=owner.id)
             if (not current() or latest_active.revision != active.revision
                     or latest_active.plan_version_id != active.plan_version_id
                     or latest_binding != binding):
@@ -4720,9 +4740,9 @@ class ProductionMonitorPipeline:
                         start=state.definition.effective_from, end=target)
                     work.commit()
                     return work.daily.get_buy_suspension(symbol=plan.symbol,
-                        owner_plan_version_id=active.plan_version_id)
+                        owner_plan_version_id=owner.id)
             fresh = work.daily.get_buy_suspension(symbol=plan.symbol,
-                owner_plan_version_id=active.plan_version_id)
+                owner_plan_version_id=owner.id)
             committed = (() if window is None else work.history.list_minutes(plan.symbol,
                 start=window.bars[0].bar_end, end=window.through))
             if window is not None and tuple(bar.model_dump(exclude={"received_at"})
@@ -4748,13 +4768,13 @@ class ProductionMonitorPipeline:
             if changed.model_dump(exclude={"evaluated_at"}) != fresh["state"].model_dump(
                     exclude={"evaluated_at"}):
                 work.daily.save(identity, kind="BUY_SUSPENSION", symbol=plan.symbol,
-                    lineage=active.plan_version_id, payload=changed.model_dump(mode="json"),
+                    lineage=owner.id, payload=changed.model_dump(mode="json"),
                     expected_revision=fresh["revision"])
             if not current():
                 raise RecoveryAdmissionChangedError("suspension source changed before commit")
             work.commit()
             return work.daily.get_buy_suspension(symbol=plan.symbol,
-                owner_plan_version_id=active.plan_version_id)
+                owner_plan_version_id=owner.id)
 
     async def prepare_daily_inputs(self, plan, evaluated_at, official_trade_date, minutes):
         """Real same-provider adapter; offline tests inject the SDK, not another runtime."""

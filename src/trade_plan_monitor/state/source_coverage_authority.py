@@ -176,6 +176,15 @@ def validate_buy_suspension_clarifications(draft, supplements, source_text):
 def validate_buy_suspension_replacement_intent(draft, intent, source_text):
     """Validate a finite explicit source proposal, without resolving runtime ancestry."""
     from trade_plan_monitor.ai.source_boundaries import partition_at, source_partitions
+    from trade_plan_monitor.ai.source_treatments import buy_suspension_replacement_proposal
+
+    proposal = None if source_text is None else buy_suspension_replacement_proposal(source_text)
+    if proposal is not None and (
+        proposal["start"], proposal["end"], proposal["excerpt"],
+        proposal["retire_predecessor_guard"], proposal["strategy_effective_from"],
+    ) != (intent.source_start, intent.source_end, intent.excerpt,
+          intent.retire_predecessor_guard, intent.strategy_effective_from.isoformat()):
+        raise ValueError("replacement intent requires its exact source proposal and strategy start")
 
     if (draft.schema_version != 10 or source_text is None
             or intent.source_hash != scope_hash(source_text)
@@ -200,15 +209,19 @@ def validate_buy_suspension_replacement_intent(draft, intent, source_text):
 
 
 def _verify_buy_suspension_replacement_intent(session, details, draft, *, clock):
+    from types import SimpleNamespace
+
     from trade_plan_monitor.state.daily_repository import DailyRepository
+    from trade_plan_monitor.state.source_action_reads import ActionOwnerReader
     from trade_plan_monitor.state.source_coverage_values import BuySuspensionReplacementIntent
 
     daily = DailyRepository(session, clock=clock, id_factory=None)
-    review = daily.get("review-" + details.id)
+    fresh = ActionOwnerReader(SimpleNamespace(daily=daily)).daily
+    review = fresh("review-" + details.id)
     intent = None if review is None else review["payload"].get("buy_suspension_replacement_intent")
     if intent is None:
         return
-    registered = daily.get(daily_hash("daily-human-supplements-v1", dict(
+    registered = fresh(daily_hash("daily-human-supplements-v1", dict(
         symbol=draft.symbol, content_hash=daily_draft_content_sha256(draft))))
     if (registered is None or registered["kind"] != "DRAFT"
             or registered["payload"].get("buy_suspension_replacement_intent") != intent):
@@ -218,11 +231,13 @@ def _verify_buy_suspension_replacement_intent(session, details, draft, *, clock)
 
 
 def _require_buy_suspension_replacement_review(work, details):
+    from trade_plan_monitor.ai.source_treatments import buy_suspension_replacement_proposal
+
     review = work.daily.get("review-" + details.id)
     if (review is not None
-            and review["payload"].get("buy_suspension_replacement_intent") is not None):
-        # A registered source proposal is not runtime replacement authority. T08
-        # admits exact receipts only with the real predecessor/guard snapshot.
+            and review["payload"].get("buy_suspension_replacement_intent") is not None
+            and buy_suspension_replacement_proposal(details.source_text) is None):
+        # Incomplete proposals stay inspectable but cannot acquire review authority.
         raise SourceCoverageAuthorityError("BUY_SUSPENSION_REPLACEMENT_REVIEW_REQUIRED")
 
 
@@ -256,6 +271,8 @@ def require_current_coverage(work, details, *, require_review=False):
 
 
 def require_confirmation_coverage(work, details, command):
+    # Source proof establishes the registered proposal. The review writer resolves
+    # the actual predecessor and creates its receipt with the new review identity.
     _require_buy_suspension_replacement_review(work, details)
     expected = (getattr(command, "coverage_evidence_hash", None),
                 getattr(command, "coverage_rules_version", None))

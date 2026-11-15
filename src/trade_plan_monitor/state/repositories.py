@@ -1113,11 +1113,10 @@ class PlanRepository:
         *,
         expected_revision: int,
         validation: PlanValidationResult,
+        buy_suspension_current=None,
     ) -> ActivePlanRecord:
         if not isinstance(plan, TradePlan | ExplicitTradePlan | DailyTradePlan):
             raise TypeError("plan must be an executable trade plan")
-        if plan.schema_version == 10:
-            raise PlanActivationBlockedError("BUY_SUSPENSION_ACTIVATION_UNSUPPORTED")
         if type(expected_revision) is not int or expected_revision < 0:
             raise ValueError("expected_revision must be a non-negative integer")
         if not isinstance(validation, PlanValidationResult):
@@ -1128,11 +1127,14 @@ class PlanRepository:
         try:
             with self._session.begin_nested():
                 self._lock_plan_activation_writer(plan.symbol)
+                # begin_nested flushed pending work before this writer fence.
+                # Refresh the actual source/review/activation owners, not a prior read cache.
+                self._session.expire_all()
                 target = self.get_version(plan.plan_id, plan.version)
                 if target is None or target.plan_hash != plan_sha256(plan):
                     raise PlanVersionNotFoundError("Plan version was not found")
                 self._reject_invalidated_plan_version(target)
-                if plan.schema_version in {5, 6, 7, 8, 9}:
+                if plan.schema_version in {5, 6, 7, 8, 9, 10}:
                     self._require_source_review(target.id)
                 unresolved_close = self._session.scalar(
                     select(PendingOfficialClose).where(PendingOfficialClose.symbol == plan.symbol)
@@ -1153,6 +1155,9 @@ class PlanRepository:
                 )
                 if expected_revision != current_revision:
                     raise RevisionConflictError(current_revision)
+
+                self._require_buy_suspension_activation(target.id,
+                    current=buy_suspension_current)
 
                 activated_at = _aware_now(self._clock)
                 state_statement = sqlite_insert(PlanActivationState).values(
@@ -1255,6 +1260,37 @@ class PlanRepository:
         except IntegrityError:
             raise RepositoryError("Plan activation could not be persisted") from None
         return after
+
+    def _require_buy_suspension_activation(self, version_id, *, current):
+        """All families share this actual writer fence, including direct participants."""
+        from types import SimpleNamespace
+
+        from trade_plan_monitor.state.activation_history import resolve_buy_suspension_context
+        from trade_plan_monitor.state.daily_repository import DailyRepository
+        from trade_plan_monitor.state.daily_review_store import review_buy_suspension_replacement
+
+        details = self.get_version_details(version_id)
+        try:
+            context = resolve_buy_suspension_context(self, details.symbol)
+            daily = DailyRepository(self._session, clock=self._clock, id_factory=None)
+            review = daily.get("review-" + details.id)
+            payload = {} if review is None else review["payload"]
+            # Re-enabling the already installed exact context preserves its owner;
+            # its historical replacement receipt is not a second recovery decision.
+            if context.predecessor is not None and context.predecessor.id == details.id:
+                return
+            work = SimpleNamespace(plans=self, daily=daily,
+                                   references=MarketReferenceRepository(self._session))
+            expected = review_buy_suspension_replacement(work, details,
+                payload.get("buy_suspension_replacement_intent"), review_id=details.review_id,
+                confirmed_at=details.review_confirmed_at or _aware_now(self._clock),
+                observed_at=_aware_now(self._clock), current=current)
+            stored = payload.get("buy_suspension_replacement")
+            if (None if expected is None else expected.model_dump(mode="json")) != stored:
+                raise ValueError("replacement receipt is missing or no longer matches actual state")
+        except ValueError as error:
+            raise PlanActivationBlockedError(
+                "BUY_SUSPENSION_REPLACEMENT_REVIEW_REQUIRED: " + str(error)) from error
 
     def deactivate(
         self,
