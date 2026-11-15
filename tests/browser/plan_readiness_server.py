@@ -44,7 +44,7 @@ class NextTarget(ApiValue):
 
 
 class SourceCase(ApiValue):
-    scenario: Literal["repair", "contexts"]
+    scenario: Literal["repair", "contexts", "buy-suspension-replacement"]
 
 
 def official_wait_plan():
@@ -190,7 +190,7 @@ class ReadinessFixture:
         runtime = self.case.composition._runtime
         _, _, plans = runtime._liveness_owner._pipeline.runtime_status_snapshot()
         proof = plans[0].completion
-        return {
+        result = {
             "temporary": True,
             "root": str(self.root),
             "database": str(self.root / "monitor.sqlite3"),
@@ -207,6 +207,42 @@ class ReadinessFixture:
             "externalAttempts": list(self.external_attempts),
             "storage": FixtureState(self.root, self.lifecycle).snapshot(),
         }
+        if getattr(self, "browser_socket_count", None) is not None:
+            result["browserSockets"] = self.browser_socket_count()
+        if self.scenario == "buy-suspension":
+            from tests.browser.plan_buy_suspension_case import STATEMENT, source_case
+
+            with self.lifecycle._unit_of_work() as work:
+                active = work.plans.get_activation_state(self.case.plan.symbol)
+                from trade_plan_monitor.market_data.tushare_client import (
+                    buy_suspension_source_identity,
+                )
+
+                pipeline = runtime._liveness_owner._pipeline
+                client = pipeline.provider._client._client
+                from trade_plan_monitor.domain.plan_codec import load_plan_json
+                from trade_plan_monitor.state.activation_history import (
+                    resolve_buy_suspension_context,
+                )
+
+                context = resolve_buy_suspension_context(work.plans, self.case.plan.symbol)
+                details = work.plans.get_version_details(active.plan_version_id)
+                plan = load_plan_json(details.payload_json)
+                guard = (None if context.owner is None else work.daily.get_buy_suspension(
+                    symbol=plan.symbol, owner_plan_version_id=context.owner.id))
+                result["pbs"] = dict(activeVersionId=active.plan_version_id,
+                    sources=[source_case(replacement=r)[1] for r in (False, True)],
+                    statement=STATEMENT, aiCalls=self.pbs_ai.calls,
+                    sourceIdentity=buy_suspension_source_identity(client, pipeline._endpoint),
+                    clientType=str(type(client)), endpoint=pipeline._endpoint,
+                    admission=pipeline._decision_commit_current(),
+                    sdkCalls=self.case.sdk.calls,
+                    guardCalls=self.guard_calls,
+                    guardCurrent=pipeline.buy_suspension_current(work, plan,
+                        expected_revision=None if guard is None else guard["revision"]),
+                    guards=work.daily.list(symbol=self.case.plan.symbol, kind="BUY_SUSPENSION"),
+                    simulations=work.daily.list(symbol=self.case.plan.symbol, kind="SIMULATION"))
+        return result
 
     def restore_boundaries(self):
         self.patch.undo()
@@ -219,6 +255,7 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
         "notifications",
         "official-wait",
         "independent-risk",
+        "buy-suspension",
     }:
         raise ValueError("Unknown fixed browser scenario")
     root = root.resolve()
@@ -226,6 +263,10 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
         raise ValueError("Use a fresh project-local .pytest_cache directory")
     if root.is_symlink() or root.exists() and any(root.iterdir()):
         raise ValueError("A fresh isolated readiness directory is required")
+    if scenario == "buy-suspension":
+        from tests.browser.plan_buy_suspension_case import validate_static
+
+        validate_static(static_directory)
     root.mkdir(parents=True, exist_ok=True)
     state = ReadinessFixture(root)
     state.scenario = scenario
@@ -237,6 +278,10 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
         from tests.integration.test_plan_readiness_profile_ownership import installed, start_current
 
         plan = None
+        if scenario == "buy-suspension":
+            from tests.browser.plan_buy_suspension_case import legacy_plan
+
+            plan = legacy_plan(seed=True)
         if scenario == "manual-leaves":
             raw = current_sample_plan().model_dump(mode="json")
             raw["alert_rules"] = []
@@ -314,6 +359,14 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
                 if scenario == "independent-risk"
                 else None,
             )
+        elif scenario == "buy-suspension":
+            from tests.browser.plan_buy_suspension_case import PBSInputs, sdk_transport
+            from tests.integration import test_live_pipeline_acceptance as live
+
+            state.patch.setattr(live, "ENDPOINT", "https://api.waditu.com/dataapi")
+            state.case = installed(root, state.patch, 2, plan=plan, sdk_factory=PBSInputs,
+                initial_at=live.NOW.replace(hour=9, minute=34, second=0))
+            sdk_transport(state)
         else:
             state.case = installed(root, state.patch, 2, plan=plan)
         if scenario == "notifications":
@@ -328,11 +381,18 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
             database_path=root / "monitor.sqlite3",
             clock=state.case.clock.now,
         )
+        ai_options = {"ai_service": DisabledAI()}
+        if scenario == "buy-suspension":
+            from tests.browser.plan_buy_suspension_case import PBSExtraction
+
+            state.pbs_ai = PBSExtraction(config_path=root / "never-read.yaml",
+                review_store=state.lifecycle)
+            ai_options = {"ai_lifecycle_factory": lambda: state.pbs_ai}
         app = create_app(
             runtime_factory=lambda: state.case.composition,
             read_service=state.case.composition.read_service,
             plan_lifecycle_factory=lambda: state.lifecycle,
-            ai_service=DisabledAI(),
+            **ai_options,
             monitor_contract_version=2,
             bind_port=port,
             static_directory=static_directory,
@@ -345,7 +405,7 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
         async def lifespan(application):
             try:
                 async with native_lifespan(application):
-                    if scenario == "manual-leaves":
+                    if scenario in {"manual-leaves", "buy-suspension"}:
                         active = await state.lifecycle.get_plan_activation_state(symbol=plan.symbol)
                         saved = await state.lifecycle.get_plan_version(
                             version_id=str(active.plan_version_id)
@@ -359,7 +419,7 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
                                 {
                                     "symbol": plan.symbol,
                                     "coreQty": 0,
-                                    "tacticalQty": 0,
+                                    "tacticalQty": 100 if scenario == "buy-suspension" else 0,
                                     "expectedRevision": 0,
                                 },
                             ),
@@ -436,9 +496,12 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
                             if response.status_code != 200:
                                 raise AssertionError(response.text)
                     async with asyncio.timeout(30):
-                        if scenario == "independent-risk":
+                        if scenario in {"independent-risk", "buy-suspension"}:
                             assert (await state.case.composition.start()).status.value == "RUNNING"
                             await state.case.clock.park()
+                            if scenario == "buy-suspension":
+                                await state.case.clock.drive(state.case.clock.now().replace(
+                                    hour=9, minute=35, second=12))
                             active = await state.lifecycle.get_plan_activation_state(
                                 symbol=state.case.plan.symbol
                             )
@@ -467,11 +530,15 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
 
         @app.post(PREFIX + "/next-target", dependencies=guards)
         async def next_target(command: NextTarget):
-            if state.cycles != 1:
+            if state.cycles != 1 and not (state.scenario == "buy-suspension" and state.cycles < 6):
                 raise ApiError(ApiErrorCode.CONFLICT)
+            if state.scenario == "buy-suspension":
+                from tests.browser.plan_buy_suspension_case import current_tradability
+
+                await current_tradability(state, port)
             async with asyncio.timeout(30):
                 await state.case.clock.drive(state.case.clock.now() + timedelta(minutes=5))
-            state.cycles = 2
+            state.cycles += 1
             return state.inspect()
 
         @app.post(PREFIX + "/calendar-loss", dependencies=guards)
@@ -677,6 +744,26 @@ def create_fixture_app(root: Path, *, port=8765, static_directory=None, scenario
         async def source_case(command: SourceCase, context: MutationContextDependency):
             if command.scenario in state.source_cases:
                 return state.source_cases[command.scenario]
+            if command.scenario == "buy-suspension-replacement":
+                if state.scenario != "buy-suspension":
+                    raise ApiError(ApiErrorCode.CONFLICT)
+                from tests.browser.plan_buy_suspension_case import source_case as pbs_source
+
+                from trade_plan_monitor.domain.daily_plan_validation import (
+                    daily_draft_content_sha256,
+                )
+
+                draft, source, mapping = pbs_source(replacement=True)
+                mapping = mapping.model_copy(update={
+                    "candidate_content_hash": daily_draft_content_sha256(draft)})
+                active = await state.lifecycle.get_plan_activation_state(symbol=draft.symbol)
+                saved = await state.lifecycle.save_plan_draft(command=PlanDraftCommand(
+                    plan_json=daily_draft_json(draft), source_text=source, daily_mapping=mapping,
+                    expected_revision=active.revision), context=context)
+                result = {"versionIds": [str(saved.id)], "source": source,
+                    "origin": "HUMAN_SYNTHETIC", "automaticFidelityVerified": False}
+                state.source_cases[command.scenario] = result
+                return result
             path = "alert_rules[0].condition.price_fen"
             result = {"versionIds": [], "repairPath": path, "clauseId": None, "requirement": None}
             for index in range(1 if command.scenario == "repair" else 2):
@@ -750,6 +837,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--static-directory", type=Path)
     parser.add_argument(
         "--scenario",
         choices=(
@@ -758,12 +846,15 @@ def main():
             "notifications",
             "official-wait",
             "independent-risk",
+            "buy-suspension",
         ),
         default="automatic",
     )
     args = parser.parse_args()
     app = create_fixture_app(
-        args.root, port=args.port, static_directory=REPOSITORY / "web/dist", scenario=args.scenario
+        args.root, port=args.port, static_directory=(args.static_directory if args.static_directory
+            is not None or args.scenario == "buy-suspension" else REPOSITORY / "web/dist"),
+        scenario=args.scenario
     )
     state = app.state.readiness_fixture
     server = uvicorn.Server(
@@ -775,6 +866,9 @@ def main():
         )
     )
     state.shutdown = lambda: _request_server_shutdown(server)
+    state.browser_socket_count = lambda: sum(
+        (getattr(connection, "scope", None) or {}).get("type") == "websocket"
+        for connection in tuple(server.server_state.connections))
     try:
         server.run()
     finally:

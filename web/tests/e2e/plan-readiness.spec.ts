@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
-import type { APIRequestContext, Page, Request, Response } from "@playwright/test";
+import type { APIRequestContext, Locator, Page, Request, Response } from "@playwright/test";
 import type { ReadinessAssessment } from "../../src/api/generated-runtime-status";
 import type { PlanReviewConfirmationCommand, PlanVersionView } from "../../src/api/generated";
 import { expect, test as auditedTest } from "./fixtures";
@@ -18,6 +18,13 @@ interface Inspection {
   completionRecordId: string | null;
   sdkCalls: number; externalAttempts: string[];
   storage: Record<string, unknown> & { dailyKinds: Record<string, number> };
+  pbs?: { activeVersionId: string; sources: string[]; statement: string; aiCalls: unknown[];
+    guardCurrent: boolean;
+    guards: { id: string; revision: number; payload: { owner_plan_version_id: string;
+      source_hash: string; content_hash: string; review_id: string; birth_activation_revision: number;
+      target: string; definition: { effective_from: string };
+      coverage?: { through: string } | null; trigger?: { bar_end: string; close_fen: number } | null } }[];
+    simulations: unknown[] };
 }
 interface Fixture {
   base: string; initial: Inspection;
@@ -48,33 +55,38 @@ async function stop(server: ChildProcess, request: APIRequestContext, base: stri
   expect(server.signalCode, "no forced termination").toBeNull();
 }
 
-const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boolean; notificationJourney: boolean; officialJourney: boolean; riskJourney: boolean }>({
+const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boolean; notificationJourney: boolean; officialJourney: boolean; riskJourney: boolean; suspensionJourney: boolean }>({
   manualLeaves: [false, { option: true }],
   notificationJourney: [false, { option: true }],
   officialJourney: [false, { option: true }],
   riskJourney: [false, { option: true }],
-  readinessFixture: async ({ page, context, request, manualLeaves, notificationJourney, officialJourney, riskJourney }, use, testInfo) => {
+  suspensionJourney: [false, { option: true }],
+  readinessFixture: async ({ page, context, request, manualLeaves, notificationJourney, officialJourney, riskJourney, suspensionJourney }, use, testInfo) => {
     const port = await freePort(), base = `http://127.0.0.1:${port}`;
     // Playwright's normal outputDir is OS temp. SQLite stays in an independently
     // fresh project-local directory regardless of reporter/output overrides.
-    const databaseParent = join(repo, ".pytest_cache/pma/t21a/browser-databases");
+    const databaseParent = join(repo, suspensionJourney ? ".pytest_cache/pbs/t12/a11" : ".pytest_cache/pma/t21a/browser-databases");
     await mkdir(databaseParent, { recursive: true });
     const root = await mkdtemp(join(databaseParent, "case-"));
+    const pbsBuild = suspensionJourney ? JSON.parse(await readFile(join(repo, "build/pbs/t12/a11/build.json"), "utf8")) : null;
     const server = spawn(join(repo, ".venv/Scripts/python.exe"), ["-X", "utf8", "-m",
       "tests.browser.plan_readiness_server", "--port", String(port), "--root", root,
-      ...(manualLeaves ? ["--scenario", "manual-leaves"] : notificationJourney ? ["--scenario", "notifications"] : officialJourney ? ["--scenario", "official-wait"] : riskJourney ? ["--scenario", "independent-risk"] : [])],
+      ...(suspensionJourney ? ["--scenario", "buy-suspension", "--static-directory",
+        pbsBuild.dist] : manualLeaves ? ["--scenario", "manual-leaves"] : notificationJourney ? ["--scenario", "notifications"] : officialJourney ? ["--scenario", "official-wait"] : riskJourney ? ["--scenario", "independent-risk"] : [])],
     { cwd: repo, windowsHide: true, env: { ...process.env, PYTHONUTF8: "1" } });
     let log = "", phase = "RUNNING";
     const record = (value: unknown) => { log = (log + String(value)).slice(-65536); };
     server.stdout?.on("data", record); server.stderr?.on("data", record);
     const external: string[] = [], afterClose: string[] = [];
     const lifecycle: string[] = [];
+    const sockets = { opened: 0, serverOpenBeforeStop: null as number | null };
     context.on("request", (req) => {
       const url = new URL(req.url());
       if (url.origin !== base) external.push(req.url());
       if (phase.startsWith("BACKEND_")) afterClose.push(req.url());
     });
     page.on("websocket", (socket) => {
+      sockets.opened++;
       if (new URL(socket.url()).host !== new URL(base).host) external.push(socket.url());
     });
     await context.route("**/*", async (route) => {
@@ -120,6 +132,15 @@ const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boole
     } finally {
       try {
         lifecycle.push("PAGE_CLOSING");
+        if (suspensionJourney && !page.isClosed()) {
+          await page.goto("about:blank");
+          await expect.poll(async () => {
+            const response = await request.get(base + prefix + "/inspect");
+            sockets.serverOpenBeforeStop = (await response.json()).browserSockets;
+            return sockets.serverOpenBeforeStop;
+          }).toBe(0);
+          lifecycle.push("SPA_TRANSPORTS_CLOSED");
+        }
         await page.close();
         lifecycle.push("PAGE_CLOSED");
       } finally {
@@ -130,7 +151,7 @@ const test = auditedTest.extend<{ readinessFixture: Fixture; manualLeaves: boole
           await writeFile(testInfo.outputPath("readiness-fixture.log"), log, "utf8");
           await writeFile(testInfo.outputPath("readiness-lifecycle.json"), JSON.stringify({ lifecycle,
             backendExitCode: server.exitCode, backendSignalCode: server.signalCode,
-            databaseRoot: root, external, afterClose }, null, 2), "utf8");
+            databaseRoot: root, external, afterClose, sockets }, null, 2), "utf8");
         }
       }
       expect(external, "zero external browser requests including attempted ones").toEqual([]);
@@ -968,4 +989,231 @@ test("real A-B-A delayed GET cannot replace the new exact review and activation 
       scope: "new exact review/activation context; missing native evaluation remains UNKNOWN",
     }, null, 2) });
   } finally { release(); page.off("response", observeOriginal); }
+});
+
+
+const pbsTest = test.extend({ suspensionJourney: true });
+pbsTest.use({ trace: "on" });
+pbsTest("PBS real extraction review activation breach rebound SELL and replacement", async ({ page, request, readinessFixture: fixture }, testInfo) => {
+  pbsTest.setTimeout(180_000);
+  const evidence: Record<string, unknown> = { initial: fixture.initial };
+  const pageErrors: string[] = []; page.on("pageerror", error => pageErrors.push(error.message));
+  const writes: { path: string; body: unknown; status: number }[] = [];
+  page.on("response", response => {
+    if (response.request().method() === "POST") writes.push({ path: new URL(response.url()).pathname,
+      body: response.request().postDataJSON(), status: response.status() });
+  });
+  await page.clock.resume();
+  async function clickPost(label: string, path: string) {
+    const pending = page.waitForResponse(r => r.url().endsWith(path) && r.request().method() === "POST");
+    await page.getByRole("button", { name: label, exact: true }).click();
+    const response = await pending;
+    expect(response.status(), await response.text()).toBe(200); return response.json();
+  }
+  async function extract(source: string) {
+    await page.clock.resume();
+    await page.goto(fixture.base + "/plans");
+    await page.getByLabel("粘贴中文计划原文", { exact: true }).fill(source);
+    await page.getByRole("button", { name: "生成计划草稿", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "编辑规则、周期与执行窗口", exact: true })).toBeVisible({ timeout: 20000 });
+    await expect(page.locator('[id="daily-.buy_suspension.condition.price_fen"]')).toHaveValue("2420");
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
+    return clickPost("保存待审核版本", "/plan-drafts");
+  }
+  async function loadGuard() {
+    await page.getByRole("button", { name: "读取本原文全部禁买义务与当前启用依据", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "已读取完整原文义务" })).toBeVisible();
+    const select = page.locator('[data-pbs="obligation"]');
+    const id = await select.locator('option').nth(1).getAttribute("value");
+    expect(id).toMatch(/^[a-f0-9]{64}$/); await select.selectOption(id!);
+    await page.locator('[data-pbs="reason"]').fill("Explicit independent clarification of this exact source guard and reviewed checking interval.");
+    await clickPost("独立登记本原文禁买澄清", "/plan-review-supplements");
+    await expect(page.getByRole("status").filter({ hasText: "禁买依据已独立登记" })).toBeVisible();
+    return clickPost("保存待审核版本", "/plan-drafts");
+  }
+  async function reviewActivate(saved: PlanVersionView, oldActive: string) {
+    expect((await fixture.inspect()).pbs!.activeVersionId).toBe(oldActive);
+    await expect(page.getByRole("button", { name: "确认当前完整审核", exact: true })).toBeEnabled();
+    const reviewed = await clickPost("确认当前完整审核", "/plan-review-confirmations");
+    expect(writes.filter(w => w.path.endsWith("/plan-review-confirmations")).at(-1)!.body).toMatchObject({
+      planVersionId: saved.id, contentHash: saved.contentHash, sourceHash: saved.sourceHash,
+      reviewEvidenceHash: saved.reviewEvidenceHash, expectedRevision: saved.reviewRevision,
+      coverageEvidenceHash: saved.sourceCoverage!.coverageEvidenceHash,
+      coverageRulesVersion: saved.sourceCoverage!.rulesVersion });
+    expect((await fixture.inspect()).pbs!.activeVersionId).toBe(oldActive);
+    await expect(page.locator(".daily-review")).toContainText("本候选尚未启用");
+    const activated = await clickPost("启用当前审核绑定", "/plan-activations");
+    expect(writes.filter(w => w.path.endsWith("/plan-activations")).at(-1)!.body).toMatchObject({
+      planVersionId: saved.id, contentHash: saved.contentHash, sourceHash: saved.sourceHash,
+      reviewEvidenceHash: saved.reviewEvidenceHash, reviewId: reviewed.reviewId,
+      reviewRevision: reviewed.revision });
+    expect(activated.planVersionId).toBe(saved.id);
+    expect((await fixture.inspect()).pbs!.activeVersionId).toBe(saved.id);
+    return { reviewed, activated };
+  }
+  async function nextAndRefresh() {
+    const active = (await fixture.inspect()).pbs!.activeVersionId;
+    // Detach real consumers while the fixed fixture clock traverses several
+    // scheduled duties, then reopen the exact persisted version for inspection.
+    await page.goto("about:blank");
+    const inspection = await fixture.next(); await page.clock.pauseAt(new Date(inspection.now));
+    await page.goto(fixture.base + "/plans/" + active);
+    await page.locator(".daily-operations").getByRole("button", { name: "刷新当前状态", exact: true }).click();
+    await pane(page).getByRole("button", { name: "重新读取监控就绪状态", exact: true }).click();
+    return inspection;
+  }
+  async function auditRegion(region: Locator, stage: string) {
+    const results: unknown[] = [];
+    const axeUrl = fixture.base + prefix + "/axe-core.js";
+    await page.route(axeUrl, route => route.fulfill({ contentType: "application/javascript", path: axePath }));
+    await page.addScriptTag({ url: axeUrl });
+    for (const width of [320, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(async () => { await document.fonts.ready; });
+      await page.clock.runFor(128); await region.scrollIntoViewIfNeeded();
+      const box = await region.boundingBox(); await page.clock.runFor(64);
+      expect(await region.boundingBox()).toEqual(box);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), stage + " overflow " + width).toBe(true);
+      const controls = await region.locator('button,input:not([type="checkbox"]),select,textarea,label:has(input[type="checkbox"])')
+        .evaluateAll(elements => elements.map(element => ({ tag: element.tagName,
+          text: element.textContent?.slice(0, 40), height: element.getBoundingClientRect().height }))
+          .filter(element => element.height > 0));
+      expect(controls.every(c => c.height >= 44), JSON.stringify({ stage, width, controls })).toBe(true);
+      const control = region.locator("button:enabled, input:enabled, select:enabled, textarea:enabled").first();
+      await control.focus(); await expect(control).toBeFocused(); await page.keyboard.press("Tab");
+      if (await region.locator("button:enabled, input:enabled, select:enabled, textarea:enabled").count() > 1)
+        expect(await region.evaluate(element => element.contains(document.activeElement))).toBe(true);
+      else {
+        await expect(control).not.toBeFocused(); await page.keyboard.press("Shift+Tab");
+        await expect(control).toBeFocused();
+      }
+      const retire = region.locator('[data-pbs="retire"]');
+      if (await retire.count()) {
+        const before = writes.length;
+        await retire.focus(); await page.keyboard.press("Space"); await expect(retire).toBeChecked();
+        await page.keyboard.press("Space"); await expect(retire).not.toBeChecked();
+        const label = retire.locator(".."); const bounds = await label.boundingBox();
+        await label.click({ position: { x: bounds!.width - 4, y: bounds!.height / 2 } });
+        await expect(retire).toBeChecked();
+        await retire.focus(); await page.keyboard.press("Space"); await expect(retire).not.toBeChecked();
+        const acknowledge = region.locator('[data-pbs="acknowledge"]');
+        await expect(acknowledge).toBeDisabled();
+        await acknowledge.locator("..").scrollIntoViewIfNeeded();
+        const disabledLabel = await acknowledge.locator("..").boundingBox();
+        await page.mouse.click(disabledLabel!.x + disabledLabel!.width - 4,
+          disabledLabel!.y + disabledLabel!.height / 2);
+        await expect(acknowledge).not.toBeChecked(); expect(writes).toHaveLength(before);
+      }
+      await page.clock.resume();
+      const violations = await region.evaluate(async element => {
+        const axe = (window as any).axe;
+        return (await axe.run(element, { runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] })).violations;
+      });
+      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
+      expect(violations).toEqual([]);
+      const path = testInfo.outputPath("pbs-" + stage + "-" + width + ".png");
+      const banner = await page.getByRole("banner").boundingBox();
+      await region.evaluate((element, headerHeight) => window.scrollTo(0, Math.max(0,
+        window.scrollY + element.getBoundingClientRect().top - headerHeight - 16)), banner?.height ?? 0);
+      await page.screenshot({ path }); await testInfo.attach(stage + "-" + width, { path, contentType: "image/png" });
+      if (await region.locator("form").count()) {
+        await region.locator("form").last().scrollIntoViewIfNeeded();
+        const focusTarget = region.locator('[data-pbs="start"]');
+        await focusTarget.focus();
+        await focusTarget.evaluate((element, headerHeight) => window.scrollTo(0, Math.max(0,
+          window.scrollY + element.getBoundingClientRect().top - Math.max(headerHeight + 16, 240))), banner?.height ?? 0);
+        const focused = await focusTarget.boundingBox();
+        expect(focused!.y).toBeGreaterThanOrEqual((banner?.height ?? 0) + 16);
+        expect(focused!.y + focused!.height).toBeLessThanOrEqual(900);
+        expect(await focusTarget.evaluate(element => {
+          const r = element.getBoundingClientRect();
+          const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+          return top === element || top !== null && element.contains(top);
+        }), "focused replacement control is not covered by the fixed header").toBe(true);
+        await expect(focusTarget).toBeFocused();
+        const bottom = testInfo.outputPath("pbs-" + stage + "-bottom-" + width + ".png");
+        await page.screenshot({ path: bottom });
+        await testInfo.attach(stage + "-bottom-" + width, { path: bottom, contentType: "image/png" });
+        results.push({ width, focusedControl: "strategyStart", focused, banner, unobscured: true, bottom });
+      }
+      results.push({ width, height: 900, controls, violations, path });
+    }
+    evidence[stage + "Audit"] = results;
+  }
+  try {
+    const initial = await extract(fixture.initial.pbs!.sources[0]!);
+    expect(initial.canActivate).toBe(false); expect(initial.reviewId).toBeNull();
+    await auditRegion(page.getByRole("region", { name: "禁买澄清与接替登记", exact: true }), "clarification");
+    const clarified = await loadGuard();
+    evidence.first = { initial, clarified, ...await reviewActivate(clarified, fixture.initial.pbs!.activeVersionId) };
+    const breached = await nextAndRefresh(); evidence.breached = breached;
+    await expect(page.getByRole("region", { name: "持续禁买保护", exact: true })).toContainText("本计划禁止全部后续买入");
+    expect(breached.pbs!.guards.some(g => g.payload.trigger?.close_fen === 2419)).toBe(true);
+    const oldTrigger = breached.pbs!.guards.find(g => g.payload.trigger)!.payload.trigger;
+    const rebound = await nextAndRefresh(); evidence.rebound = rebound;
+    expect(rebound.pbs!.guards.find(g => g.payload.trigger)!.payload.trigger).toEqual(oldTrigger);
+    await expect(page.getByRole("region", { name: "持续禁买保护", exact: true })).toContainText("本计划禁止全部后续买入");
+    await expect(page.locator(".daily-operations").getByRole("button", { name: "确认一次模拟卖出100股", exact: true })).toBeEnabled();
+    evidence.sell = await clickPost("确认一次模拟卖出100股", "/simulated-trades");
+    expect((evidence.sell as { side: string }).side).toBe("SELL");
+    const guard = page.getByRole("region", { name: "持续禁买保护", exact: true });
+    await auditRegion(guard, "latched");
+    const sourceButton = guard.getByRole("button", { name: "查看原文核对与接替要求", exact: true });
+    await sourceButton.focus(); await expect(sourceButton).toBeFocused(); await page.keyboard.press("Enter");
+    const replacementSetup = await command(request, fixture, prefix + "/source-case",
+      { scenario: "buy-suspension-replacement" });
+    expect(replacementSetup.status(), await replacementSetup.text()).toBe(200);
+    const setup = await replacementSetup.json();
+    expect(setup.origin).toBe("HUMAN_SYNTHETIC");
+    await page.goto(fixture.base + "/plans/" + setup.versionIds[0]);
+    await expect(page.getByRole("heading", { name: "编辑规则、周期与执行窗口", exact: true })).toBeVisible();
+    const replacementInitial = setup;
+    const replacement = await loadGuard();
+    await page.getByRole("button", { name: "读取本原文全部禁买义务与当前启用依据", exact: true }).click();
+    await expect(page.locator('[data-pbs="obligation"] option').nth(1)).toHaveCount(1);
+    await page.locator('[data-pbs="reason"]').fill("Explicit replacement by the new exact source without erasing the original observed breach.");
+    await page.locator('[data-pbs="excerpt"]').fill(fixture.initial.pbs!.statement);
+    await page.locator('[data-pbs="start"]').fill("2026-09-08T09:50:00+08:00");
+    await auditRegion(page.getByRole("region", { name: "禁买澄清与接替登记", exact: true }), "replacement");
+    evidence.intent = await clickPost("独立登记新原文接替意图", "/plan-review-supplements");
+    await expect(page.getByRole("status").filter({ hasText: "禁买依据已独立登记" })).toBeVisible();
+    const finalSaved = await clickPost("保存待审核版本", "/plan-drafts");
+    await auditRegion(page.locator(".daily-review__actions"), "review-activation");
+    expect(finalSaved.sourceText).toBe(setup.source);
+    expect(finalSaved.sourceHash).toBe(createHash("sha256").update(setup.source, "utf8").digest("hex"));
+    const replacementBinding = await reviewActivate(finalSaved, clarified.id);
+    evidence.replacement = { replacementInitial, replacement, finalSaved, ...replacementBinding };
+    const beforeStart = await fixture.inspect(); evidence.beforeStart = beforeStart;
+    expect(beforeStart.pbs!.guardCurrent).toBe(false);
+    expect(beforeStart.pbs!.guards.some(g => g.payload.owner_plan_version_id === finalSaved.id)).toBe(false);
+    const beforeRead = await request.get(fixture.base + "/api/v1/plan-versions/" + finalSaved.id + "/monitor-readiness");
+    expect(beforeRead.status()).toBe(200);
+    const beforeAssessment: ReadinessAssessment = await beforeRead.json();
+    expect(beforeAssessment.snapshot.buySuspension!.state).toBeNull();
+    expect(beforeAssessment.snapshot.buySuspension!.outcome).toBe("UNVERIFIED");
+    await nextAndRefresh();
+    const final = await fixture.inspect(); evidence.final = final;
+    expect(final.pbs!.guards.find(g => g.payload.trigger)!.payload.trigger).toEqual(oldTrigger);
+    expect(final.pbs!.aiCalls).toHaveLength(1);
+    const newGuard = final.pbs!.guards.find(g => g.payload.owner_plan_version_id === finalSaved.id)!;
+    expect(newGuard.revision).toBeGreaterThan(0);
+    expect(newGuard.payload.birth_activation_revision).toBe(replacementBinding.activated.revision);
+    expect(newGuard.payload.source_hash).toBe(finalSaved.sourceHash);
+    expect(newGuard.payload.content_hash).toBe(finalSaved.contentHash);
+    expect(newGuard.payload.review_id).toBe(replacementBinding.reviewed.reviewId);
+    expect(newGuard.payload.definition).toEqual(JSON.parse(finalSaved.planJson).buy_suspension);
+    expect(newGuard.payload.target).toBe("2026-09-08T09:50:00+08:00");
+    expect(newGuard.payload.trigger).toBeNull();
+    expect(newGuard.payload.definition.effective_from).toBe("2026-09-08T09:45:00+08:00");
+    expect(newGuard.payload.coverage!.through).toBe("2026-09-08T09:50:00+08:00");
+    expect(final.pbs!.guardCurrent).toBe(true);
+    const actualRuntime = await request.get(fixture.base + "/api/v1/plan-runtime/003043.SZ");
+    expect(actualRuntime.status()).toBe(200); const runtimeView = await actualRuntime.json();
+    expect(runtimeView.snapshot.signals.filter((s: { side: string }) => s.side === "BUY"))
+      .toEqual([expect.objectContaining({ executableQty: 100, state: "READY" })]);
+    evidence.newGuardRuntime = runtimeView;
+    expect(pageErrors).toEqual([]); expect(writes.every(w => w.status < 400)).toBe(true);
+  } finally {
+    await testInfo.attach("pbs-public-journey", { contentType: "application/json", body: JSON.stringify({ evidence, writes, pageErrors }, null, 2) });
+  }
 });
