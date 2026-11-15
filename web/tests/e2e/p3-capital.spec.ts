@@ -1,17 +1,28 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
+import type { DailySupplementCommand, SourceCoveragePage } from "../../src/api/generated";
 import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { expect, test } from "./fixtures";
 
 const repo = resolve(process.cwd(), "..");
 const cases = [
-  {mode: "MARKET_VALUE_CAP", limit: "CAPITAL_ONLY", route: "ORDINARY", quantity: 200},
-  {mode: "OPEN_COST_CAP", limit: "CAPITAL_ONLY", route: "ORDINARY", quantity: 200},
-  {mode: "MARKET_VALUE_CAP", limit: "QUANTITY_AND_CAPITAL", route: "WEAK_MINIMUM", quantity: 100},
-  {mode: "OPEN_COST_CAP", limit: "QUANTITY_AND_CAPITAL", route: "BROKEN_STRONG", quantity: 300},
+  {mode: "MARKET_VALUE_CAP", limit: "CAPITAL_ONLY", route: "ORDINARY", quantity: 200, humanCount: 75,
+    frozenSourceHash: "5d063ac6e5e4c72f2be92e2d85c64a61aee40cb5e8d6ff02bd304f162bb35fd0",
+    frozenPlanHash: "39830a366038ec72a828b4dd51b0030c5ca667cc1a029c8cfba4de1af7767d38"},
+  {mode: "OPEN_COST_CAP", limit: "CAPITAL_ONLY", route: "ORDINARY", quantity: 200, humanCount: 88,
+    frozenSourceHash: "5dfd835b93c52aaff9f1a1babc9731635e903108a171a5507dd4981a5823ca7d",
+    frozenPlanHash: "e186d25f35481026cd5c3bc91cc71ed2298f0f9a9e45c11c38779920e4c47e24"},
+  {mode: "MARKET_VALUE_CAP", limit: "QUANTITY_AND_CAPITAL", route: "WEAK_MINIMUM", quantity: 100, humanCount: 76,
+    frozenSourceHash: "84bd67c450f4e741ee31732db8a883d099b6cd0542ccb61109890b8675658038",
+    frozenPlanHash: "97b649d8fa49395c5adc6201410efd0a48319d2eb1b418a322a90e653ab785fa"},
+  {mode: "OPEN_COST_CAP", limit: "QUANTITY_AND_CAPITAL", route: "BROKEN_STRONG", quantity: 300, humanCount: 89,
+    frozenSourceHash: "ed4b0a4a6471562cca6045a85e5fa605987c128975bdbc2dfe2eb6c1cdc5b2fe",
+    frozenPlanHash: "24ea35fda3883417388eb639aa21456588efd47ed826ea73fad524b72b5b81ab"},
 ] as const;
 
-for (const scenario of cases) test.describe(`${scenario.mode} ${scenario.limit} ${scenario.route}`, () => {
+for (const scenario of cases) for (const completeSource of [false, true]) test.describe(
+  `${completeSource ? "complete FIELD source" : "original abbreviated source"} ${scenario.mode} ${scenario.limit} ${scenario.route}`, () => {
   let base: string, server: ChildProcess | undefined;
   let log = "";
   test.beforeAll(async ({request}) => {
@@ -40,7 +51,16 @@ for (const scenario of cases) test.describe(`${scenario.mode} ${scenario.limit} 
   test("review, reconcile, preview, approve separately, whole quote fail/recovery and reload", async ({page, request}, testInfo) => {
     test.setTimeout(150_000);
     await page.clock.install({time: new Date("2026-09-22T10:00:00+08:00")});
-    const setup = await (await request.post(`${base}/_test/setup`)).json();
+    const setup: {source: string; originalSource: string; sourceContract: string; bindingInputBudgetChars: number; expectedPlan: unknown;
+      humanDefinitions: {path: string; value: unknown}[]} = await (await request.post(
+        `${base}/_test/setup?source_contract=${completeSource ? "COMPLETE_FIELDS" : "ABBREVIATED"}`)).json();
+    expect(setup.sourceContract).toBe(completeSource ? "COMPLETE_FIELDS" : "ABBREVIATED");
+    const configured = await request.get(`${base}/api/v1/ai-runtime`);
+    expect(configured.status()).toBe(200);
+    expect((await configured.json()).maxInputChars).toBe(setup.bindingInputBudgetChars);
+    expect(setup.bindingInputBudgetChars).toBe(200000);
+    expect(createHash("sha256").update(setup.originalSource).digest("hex")).toBe(scenario.frozenSourceHash);
+    expect(setup.humanDefinitions).toHaveLength(scenario.humanCount);
     const external: string[] = [];
     const mutations: string[] = [];
     page.on("request", req => {
@@ -52,18 +72,65 @@ for (const scenario of cases) test.describe(`${scenario.mode} ${scenario.limit} 
     await page.getByRole("button", {name: "生成计划草稿", exact: true}).click();
     await expect(page.getByRole("heading", {name: "编辑规则、周期与执行窗口"})).toBeVisible();
     await expect(page.getByRole("region", {name: "金额上限政策审核"})).toContainText("超限不会自动缩量");
-    for (const input of await page.getByLabel("本句实际对应的技术参数路径（逗号分隔）", {exact: true}).all())
-      await input.fill("ordinary_rules[0].pretrade_policy.sizing.base_qty");
-    for (const textarea of await page.locator(".daily-review textarea").all())
-      await textarea.fill(`Synthetic independent human verification: ${setup.source}`);
+    if (completeSource) {
+      await expect(page.locator('.daily-review textarea[id^="reason-"]')).toHaveCount(scenario.humanCount);
+      for (const field of setup.humanDefinitions)
+        await page.locator(`[id="reason-${field.path}"]`).fill(
+          `Synthetic independent human definition: ${field.path} = ${JSON.stringify(field.value)}; verified against this exact complete FIELD source, with no holdings, cost basis or trades inferred.`);
+    } else {
+      for (const input of await page.getByLabel("本句实际对应的技术参数路径（逗号分隔）", {exact: true}).all())
+        await input.fill("ordinary_rules[0].pretrade_policy.sizing.base_qty");
+      for (const textarea of await page.locator(".daily-review textarea").all())
+        await textarea.fill(`Synthetic independent human verification: ${setup.source}`);
+    }
+    const registering = page.waitForResponse(r => r.url().endsWith("/plan-review-supplements") && r.request().method() === "POST");
     await page.getByRole("button", {name: "单独登记上述人工补充", exact: true}).click();
     await expect(page.getByRole("status").filter({hasText: "人工补充已独立登记"})).toBeVisible();
+    const registered = await registering;
+    expect(registered.status(), await registered.text()).toBe(200);
+    const humanCommand: DailySupplementCommand = registered.request().postDataJSON();
+    expect(humanCommand.supplements).toHaveLength(scenario.humanCount);
+    expect(Object.fromEntries(humanCommand.supplements.map(item => [item.path, item.value]))).toEqual(
+      Object.fromEntries(setup.humanDefinitions.map(item => [item.path, item.value])));
     const saving = page.waitForResponse(r => r.url().endsWith("/plan-drafts") && r.request().method() === "POST");
     await page.getByRole("button", {name: "保存待审核版本", exact: true}).click();
     const savedResponse = await saving;
     expect(savedResponse.status(), await savedResponse.text()).toBe(200);
     const saved = await savedResponse.json();
     expect(JSON.parse(saved.planJson).schema_version).toBe(9);
+    expect(JSON.parse(saved.planJson)).toEqual(setup.expectedPlan);
+    expect(createHash("sha256").update(saved.planJson).digest("hex")).toBe(scenario.frozenPlanHash);
+    expect(saved.sourceText).toBe(setup.source);
+    expect(saved.dailyMapping.supplements).toHaveLength(scenario.humanCount);
+    expect(saved.dailyIssues).toEqual([]);
+    const pages: SourceCoveragePage[] = [];
+    let cursor: string | null = null;
+    do {
+      const coverage = await request.get(`${base}/api/v1/plan-versions/${saved.id}/source-coverage`,
+        {params: {limit: 50, ...(cursor ? {cursor} : {})}});
+      expect(coverage.status(), await coverage.text()).toBe(200);
+      const page: SourceCoveragePage = await coverage.json(); pages.push(page); cursor = page.nextCursor;
+    } while (cursor);
+    const summary = pages[0]!.summary;
+    expect(summary).toEqual(saved.sourceCoverage);
+    expect(summary.authorityGranted).toBe(false); expect(summary.currentReviewBound).toBe(false);
+    await testInfo.attach("actual-source-contract-chain", {contentType: "application/json",
+      body: Buffer.from(JSON.stringify({setup, humanCommand, saved, pages}, null, 2))});
+    if (!completeSource) {
+      expect(saved.sourceText).toBe(setup.originalSource);
+      expect(summary.coverageComplete).toBe(false); expect(summary.status).toBe("BLOCKED");
+      expect(summary.obligationCount).toBe(46); expect(summary.issueCount).toBe(46);
+      expect(pages.flatMap(page => page.items).filter(item => item.kind === "OBLIGATION")
+        .every(item => item.kind === "OBLIGATION" && item.obligation.serverState === "UNRESOLVED")).toBe(true);
+      expect(summary.canConfirmReview).toBe(false); expect(saved.canActivate).toBe(false);
+      await expect(page.getByRole("button", {name: "确认当前完整审核", exact: true})).toBeDisabled();
+      expect(mutations.filter(path => /plan-review-confirmations|plan-activations|simulated-trades/.test(path))).toEqual([]);
+      expect(external).toEqual([]);
+      return;
+    }
+    expect(summary.coverageComplete).toBe(true); expect(summary.issueCount).toBe(0);
+    expect(summary.canConfirmReview).toBe(true);
+    await expect(page.getByRole("button", {name: "确认当前完整审核", exact: true})).toBeEnabled();
     await page.getByRole("button", {name: "确认当前完整审核"}).click();
     await expect(page.getByRole("button", {name: "启用当前审核绑定"})).toBeEnabled();
     await page.getByRole("button", {name: "启用当前审核绑定"}).click();

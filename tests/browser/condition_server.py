@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Literal
 
 import httpx
 import uvicorn
@@ -24,10 +25,11 @@ from tests.integration.test_web_api import _runtime_health_payload
 from tests.unit.test_ai_plan_extraction_v4 import _config
 
 from trade_plan_monitor.ai.composition import ConfiguredAIProviderBinding
-from trade_plan_monitor.ai.daily_review import daily_contract_bindings
+from trade_plan_monitor.ai.daily_review import daily_contract_bindings, semantic_values
 from trade_plan_monitor.ai.models import AIProviderProfile
 from trade_plan_monitor.ai.provider import AIUsage, RawAIResponse
 from trade_plan_monitor.ai.review import server_source_clauses
+from trade_plan_monitor.domain.daily_plan_validation import daily_draft_json
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan
 from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
 from trade_plan_monitor.market_data.aggregation import aggregate_five_minute_bar
@@ -49,7 +51,7 @@ class NoNetworkAI(ConfiguredAIWebLifecycle):
 
     async def start(self):
         config = _config().model_copy(update={"prompt_version": (
-            "plan-extract-v12")})
+            "plan-extract-v12"), "max_input_chars": 200000})
         owner = self
 
         class Provider:
@@ -72,6 +74,12 @@ class NoNetworkAI(ConfiguredAIWebLifecycle):
                         for c in server_source_clauses(owner.source)
                     ],
                 }
+                if owner.complete_source_mapping is not None:
+                    # Source declarations cover the same complete native policy.
+                    # Keep only the original product bindings: every non-product
+                    # definition still requires its own registered human supplement.
+                    output["clauses"] = [c.model_dump(mode="json")
+                                         for c in owner.complete_source_mapping.clauses]
                 return RawAIResponse(
                     request_id=request.request_id,
                     provider_id=config.provider_id,
@@ -101,7 +109,7 @@ class NoNetworkAI(ConfiguredAIWebLifecycle):
             model="offline",
             configured=True,
             enabled=True,
-            max_input_chars=200000,
+            max_input_chars=self._binding.config.max_input_chars,
             max_output_tokens=16384,
         )
 
@@ -244,6 +252,8 @@ def main():
             ai.source += (f"。单只证券CORE与TACTICAL合计采用{args.p3}，"
                 f"cap_fen={chain.plan.position.limit.capital_policy.cap_fen}。"
                 "先确定整笔数量再检查预算，超限不缩量。明确开仓成本与逐次批准、模拟执行分开。")
+        abbreviated_source = ai.source
+        ai.complete_source_mapping = None
         ai._review_store = chain.plans
         app = create_app(
             runtime_factory=lambda: OfflineRuntime(chain),
@@ -276,7 +286,16 @@ def main():
             }
 
         @app.post("/_test/setup")
-        def setup():
+        def setup(source_contract: Literal["ABBREVIATED", "COMPLETE_FIELDS"] = "ABBREVIATED"):
+            draft = UnifiedPlanDraft.from_executable(ai.plan)
+            ai.source = abbreviated_source
+            ai.complete_source_mapping = None
+            if source_contract == "COMPLETE_FIELDS":
+                if not (args.linked or args.p3):
+                    raise ValueError("Complete FIELD source is limited to linked/P3 browser cases")
+                from tests.integration.test_market_linkage_review import source_mapping
+
+                ai.source, ai.complete_source_mapping = source_mapping(draft)
             with chain.plans._unit_of_work() as work:
                 pairs = (
                     (date(2026, 9, 17), FRIDAY),
@@ -294,7 +313,14 @@ def main():
                         )
                     )
                 work.commit()
-            return {"source": ai.source}
+            contract_paths = {binding.path for binding in daily_contract_bindings(draft)}
+            return {"source": ai.source, "originalSource": abbreviated_source,
+                    "sourceContract": source_contract,
+                    "bindingInputBudgetChars": ai._binding.config.max_input_chars,
+                    "expectedPlan": json.loads(daily_draft_json(draft)),
+                    "humanDefinitions": [dict(path=path, value=value)
+                        for path, value in semantic_values(draft).items()
+                        if path not in contract_paths]}
 
         @app.post("/_test/confirm-close")
         def close():
