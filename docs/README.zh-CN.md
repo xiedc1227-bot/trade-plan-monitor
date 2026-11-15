@@ -12,6 +12,8 @@ P3 已批准金额政策：[规格及六项决策](specifications/monitoring/SPE
 
 交易计划监控保证：[总规格、模块地图及六项建议决策](specifications/monitoring/SPEC-plan-monitor-assurance.zh-CN.md) · [强制原文条件覆盖](specifications/monitoring/SPEC-source-condition-coverage.zh-CN.md) · [v12完整计划提取验收](specifications/monitoring/SPEC-extraction-v12-acceptance.zh-CN.md) · [只读监控就绪](specifications/monitoring/SPEC-monitor-readiness.zh-CN.md) · [24项任务及八个检查点](../tasks/plan-monitor-assurance.zh-CN.md)。本阶段已批准实施，重点防止静默遗漏强制条件，区分提取质量与实际监控就绪；实施与阶段验收进行中，不授权迁移用户数据。
 
+已交付工程包括原文覆盖审核与逐规则只读就绪；[操作指南](operations/plan-monitor-assurance.zh-CN.md)说明受支持的自动求值、保留人工步骤及有界缺值草稿支持。完整冻结回归仍为FAILED，后续浏览器定向修复不关闭完整T22/A12、F083／原始03/04／C05或最终验收。真实提取保持0/48。唯一一次安装审计在打开SQLite前停止，实际事实未采集；工程验收不代表语料或安装就绪。
+
 ## 从这里开始
 
 英文文档是实施流程的权威输入；同名 `.zh-CN.md` 是语义等价的中文审阅副本。安装与日常检查见[项目 README](../README.zh-CN.md)，模块边界见[能力地图](architecture/CAPABILITY-MAP.zh-CN.md)，当前产品行为见[单一交易计划流程](specifications/monitoring/SPEC-unified-plan.zh-CN.md)。
@@ -81,6 +83,8 @@ P3 已批准金额政策：[规格及六项决策](specifications/monitoring/SPE
 
 ## 操作与约定
 
+- [计划监控保证操作指南](operations/plan-monitor-assurance.zh-CN.md) ([English](operations/plan-monitor-assurance.md))
+
 - [Tushare 真实认证](operations/live-certification.zh-CN.md) ([English](operations/live-certification.md))
 - [当前计划回放使用指南](operations/unified-replay.zh-CN.md) ([English](operations/unified-replay.md))
 - [监控闭环回测操作指南](operations/monitor-loop-backtest.zh-CN.md) ([English](operations/monitor-loop-backtest.md))
@@ -90,6 +94,8 @@ P3 已批准金额政策：[规格及六项决策](specifications/monitoring/SPE
 - [文件命名](guides/file-naming.zh-CN.md) ([English](guides/file-naming.md))
 
 ## 必要验收依据
+
+- 计划监控保证：[R140全量FAILED运行](verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r140--完整冻结回归保留七项失败)、[R141有界草稿就绪](verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r141--有界缺值草稿就绪查询不缩小规则范围)、[R142浏览器定向修复](verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r142--完整来源浏览器正例保留原计划阻断)、[R143操作指南](verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r143--双语保证操作指南交付)（[English](verification/2026-10-27-plan-monitor-assurance.md)）。
 
 - [统一计划回放验证](verification/2026-10-03-unified-replay.zh-CN.md) ([English](verification/2026-10-03-unified-replay.md))
 - [单一计划流程验证](verification/2026-10-03-unified-plan.zh-CN.md) ([English](verification/2026-10-03-unified-plan.md))

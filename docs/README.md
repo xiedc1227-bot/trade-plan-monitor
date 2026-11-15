@@ -12,6 +12,8 @@ P3 approved monetary policies: [specification and six decisions](specifications/
 
 Plan monitoring assurance: [package, module map and six proposed decisions](specifications/monitoring/SPEC-plan-monitor-assurance.md) · [mandatory source-condition coverage](specifications/monitoring/SPEC-source-condition-coverage.md) · [v12 full-plan extraction acceptance](specifications/monitoring/SPEC-extraction-v12-acceptance.md) · [read-only monitoring readiness](specifications/monitoring/SPEC-monitor-readiness.md) · [24 tasks and eight checkpoints](../tasks/plan-monitor-assurance.md). This approved phase targets silent mandatory-condition omissions and separates extraction quality from actual monitoring readiness. Implementation and staged acceptance are in progress; user database migration remains unauthorized.
 
+Delivered engineering includes source-coverage review and read-only per-rule readiness; the [operating guide](operations/plan-monitor-assurance.md) explains supported automatic evaluation, retained human steps and bounded incomplete-draft support. The complete frozen regression remains FAILED; later scoped browser repairs do not close full T22/A12, F083/original 03/04/C05 or final acceptance. Real extraction remains 0/48. The single installation audit stopped before SQLite opened, leaving actual facts uncollected; engineering acceptance does not establish corpus or installed readiness.
+
 ## Start here
 
 English documents are canonical implementation inputs; matching `.zh-CN.md` files are equivalent Chinese review copies. Use the [project README](../README.md) for installation and routine checks, the [capability map](architecture/CAPABILITY-MAP.md) for module boundaries, and [One Trade Plan Workflow](specifications/monitoring/SPEC-unified-plan.md) for current product behavior.
@@ -81,6 +83,8 @@ Machine API truth is in [`openapi.json`](../openapi.json) and [`openapi.runtime-
 
 ## Operations and conventions
 
+- [Plan monitoring assurance operating guide](operations/plan-monitor-assurance.md) ([中文](operations/plan-monitor-assurance.zh-CN.md))
+
 - [Tushare Live Certification](operations/live-certification.md) ([中文](operations/live-certification.zh-CN.md))
 - [Current Plan Replay Guide](operations/unified-replay.md) ([中文](operations/unified-replay.zh-CN.md))
 - [Monitoring-loop Backtest Operations](operations/monitor-loop-backtest.md) ([中文](operations/monitor-loop-backtest.zh-CN.md))
@@ -90,6 +94,8 @@ Machine API truth is in [`openapi.json`](../openapi.json) and [`openapi.runtime-
 - [File naming](guides/file-naming.md) ([中文](guides/file-naming.zh-CN.md))
 
 ## Necessary acceptance evidence
+
+- Plan monitoring assurance: [R140 full FAILED run](verification/2026-10-27-plan-monitor-assurance.md#pma-r140--complete-frozen-regression-preserves-seven-failures), [R141 bounded draft readiness](verification/2026-10-27-plan-monitor-assurance.md#pma-r141--bounded-incomplete-draft-readiness-without-partial-scope), [R142 scoped browser repair](verification/2026-10-27-plan-monitor-assurance.md#pma-r142--complete-source-browser-positives-retain-original-blocked-plans), [R143 operating guide](verification/2026-10-27-plan-monitor-assurance.md#pma-r143--bilingual-assurance-operating-guide-delivered) ([中文](verification/2026-10-27-plan-monitor-assurance.zh-CN.md)).
 
 - [Unified Replay Verification](verification/2026-10-03-unified-replay.md) ([中文](verification/2026-10-03-unified-replay.zh-CN.md))
 - [One Plan Workflow Verification](verification/2026-10-03-unified-plan.md) ([中文](verification/2026-10-03-unified-plan.zh-CN.md))
