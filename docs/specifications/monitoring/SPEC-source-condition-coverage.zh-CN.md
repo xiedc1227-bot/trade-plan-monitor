@@ -86,6 +86,6 @@ A/B分区标签不能豁免整段。B若引入意图约束工具执行的新前�
 
 同一注册入口接受可选 `buySuspensionReplacementIntent`，包含确切 `source_hash`、`candidate_content_hash`、`source_start`、`source_end`、`excerpt`、`replacement_reason`、`retire_predecessor_guard`、`acknowledge_unverified_predecessor`及必填 `strategy_effective_from`。策略起点必须明确使用 `+08:00`，不设置新保护的废止分支也一样。仅提供明确接替意图时允许空补充列表。注册要求完整原文声明明确接替前序持续禁买，并明确废止旧保护或提供新保护，同时包含新BUY指令。该有限来源意图核验不识别新底部，也不解析运行前序关系。预览仅通过 `buySuspensionReplacementIntent`展示已注册意图。
 
-意图保存在既有DRAFT补充记录中，再复制到 `review-<version>` 的REVIEW记录，绑定确切已保存原文／内容／版本。注册意图改变使已保存绑定失效。`BuySuspensionReplacementBinding`（版本 `buy-suspension-replacement-v1`）定义有界已审核凭据：确切前序及新版本／计划／内容／原文／审核身份、启用／状态修订、前序定义／未核实区间、新保护、完整意图及确认时间。凭据必须匹配其所属已确认审核。值级哈希不构成运行授权。PBS-T04不创建成功运行凭据或保护状态快照；带接替意图的审核确认继续以 `BUY_SUSPENSION_REPLACEMENT_REVIEW_REQUIRED`阻断。
+意图保存在既有DRAFT补充记录中，再复制到 `review-<version>` 的REVIEW记录，绑定确切已保存原文／内容／版本。注册意图改变使已保存绑定失效。`BuySuspensionReplacementBinding`（版本 `buy-suspension-replacement-v1`）定义有界已审核凭据：确切前序及新版本／计划／内容／原文／审核身份、启用／状态修订、前序定义／未核实区间、新保护、完整意图及确认时间。凭据必须匹配其所属已确认审核。值级哈希不构成运行授权。PBS-T04原先不创建成功运行凭据或保护状态快照，并以 `BUY_SUSPENSION_REPLACEMENT_REVIEW_REQUIRED` 阻断带接替意图的确认。T08现先把有限来源提议／起点证明为强制BUY关系，再根据实际前序／owner／状态和新独立审核生成凭据；来源证明不依赖尚未生成的凭据。
 
-PBS-T08负责服务端解析的前序／启用／真实保护状态绑定、通过实际凭据链消费更新审核的 `BUY_SUSPENSION_REPLACEMENT_REVIEW_REQUIRED`，以及启用时原子复核；不能过滤该问题作为豁免。PBS-T04证明的是注册→预览→底层保存／读取；公共Schema10保存准入和可执行启用在其归属任务完成前继续关闭。来源继承与运行接替授权仍是不同证据。保留Schema5–9、v12、冻结字节及原始样本；不需要用户数据库操作或provider调用。
+PBS-T08现通过实际凭据链实现服务端前序／启用／真实保护状态绑定和启用原子复核；过滤 `BUY_SUSPENSION_REPLACEMENT_REVIEW_REQUIRED` 绝不构成豁免。原文改变后，不携带另一来源已登记的意图。保留PBS-T04历史注册→预览→底层保存／读取证据；T08现覆盖受保护的公共Schema10保存／审核／启用链。见[当前启用归属](SPEC-unified-plan.zh-CN.md#u-pbs-activation--已审核续版与接替2026-11-15)。来源继承与运行接替授权仍是不同证据。保留Schema5–9、v12、冻结字节及原始样本；不需要用户数据库操作或provider调用。
