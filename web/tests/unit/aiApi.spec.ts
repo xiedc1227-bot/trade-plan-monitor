@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { createAIPlanApi } from "../../src/api/ai";
 import type { SourceCoverageSummaryView } from "../../src/api/generated";
 import partialExtraction from "../fixtures/ai-partial-extraction.json";
+import buySuspensionExtraction from "../fixtures/ai-buy-suspension-extraction.json";
 
 const runtime = {
   baseUrl: "https://api.deepseek.com/",
@@ -194,6 +195,75 @@ function noResult(status: string) {
     startedAt: status === "QUEUED" ? null : partialExtraction.startedAt,
     completedAt: ["QUEUED", "RUNNING"].includes(status) ? null : partialExtraction.completedAt };
 }
+
+describe("current-only buy suspension extraction", () => {
+  it.each(["captured", "absent", "null"])("preserves the actual v13 server response with %s source proof", async (proof) => {
+    const value: Record<string, unknown> = structuredClone(buySuspensionExtraction);
+    if (proof === "absent") delete value.sourceCoverage;
+    if (proof === "null") value.sourceCoverage = null;
+    const result = await readExtraction(value as typeof buySuspensionExtraction);
+    expect(result).toEqual(value);
+    expect(createHash("sha256").update(result.draftPlanJson!).digest("hex")).toBe(
+      createHash("sha256").update(buySuspensionExtraction.draftPlanJson).digest("hex"));
+    const draft = JSON.parse(result.draftPlanJson!);
+    expect(draft.buy_suspension).toEqual({ condition: {
+      type: "MINUTE_CLOSE_BELOW", timeframe_minutes: 5, price_fen: 2420,
+    }, effective_from: "2026-09-30T09:30:00+08:00" });
+    expect(result.dailyMapping).toEqual(buySuspensionExtraction.dailyMapping);
+    expect(result.validationIssues).toEqual(buySuspensionExtraction.validationIssues);
+  });
+
+  it.each([null, { condition: null, effective_from: null }])("retains unresolved/absent guard %j without inventing clarification", async (guard) => {
+    const value = { ...buySuspensionExtraction, sourceCoverage: null, draftPlanJson: JSON.stringify({
+      ...JSON.parse(buySuspensionExtraction.draftPlanJson), buy_suspension: guard,
+    }) };
+    await expect(readExtraction(value)).resolves.toEqual(value);
+  });
+
+  it.each(["plan-extract-v8", "plan-extract-v9", "plan-extract-v10", "plan-extract-v11", "plan-extract-v12"])(
+    "rejects Schema10 under %s even without captured source evidence", async (promptVersion) => {
+      for (const sourceCoverage of [undefined, buySuspensionExtraction.sourceCoverage]) {
+        await expect(readExtraction({ ...buySuspensionExtraction, promptVersion, sourceCoverage }))
+          .rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+      }
+    });
+
+  it.each([5, 6, 7, 8, 9])("rejects v13 paired with legacy Schema%i", async (schema_version) => {
+    const value = { ...buySuspensionExtraction, sourceCoverage: null, draftPlanJson: JSON.stringify({
+      ...JSON.parse(partialExtraction.draftPlanJson), schema_version,
+      execution_version: `condition-plan-v${schema_version - 4}`,
+    }) };
+    await expect(readExtraction(value)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it.each([
+    { execution_mode: "DAILY_CLOSE_PLAN" }, { execution_version: "condition-plan-v1" },
+    { schema_version: "10" }, { reference_market: null },
+    { contract_version: "plan-buy-suspension-extraction-v1" },
+    { buy_suspension: { condition: null } },
+    { buy_suspension: { condition: { type: "MINUTE_CLOSE_ABOVE", timeframe_minutes: 5, price_fen: 2420 }, effective_from: null } },
+    { buy_suspension: { condition: { type: "MINUTE_CLOSE_BELOW", timeframe_minutes: 1, price_fen: 2420 }, effective_from: null } },
+    { buy_suspension: { condition: null, effective_from: "2026-09-30T09:31:00+08:00" } },
+    { buy_suspension: { condition: null, effective_from: "2026-09-30T01:30:00Z" } },
+    { buy_suspension: { condition: null, effective_from: "2026-09-30T09:30:00.000001+08:00" } },
+  ])("rejects an incompatible v13 document without dropping fields %j", async (patch) => {
+    const value = { ...buySuspensionExtraction, sourceCoverage: null, draftPlanJson: JSON.stringify({
+      ...JSON.parse(buySuspensionExtraction.draftPlanJson), ...patch,
+    }) };
+    await expect(readExtraction(value)).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("rejects invented envelope, human supplement and saved replacement authority", async () => {
+    for (const patch of [
+      { contractVersion: "plan-buy-suspension-extraction-v1" },
+      { buySuspensionReplacementBinding: { authority_granted: true } },
+      { dailyMapping: { ...buySuspensionExtraction.dailyMapping, supplements: [{ supplement_id: "invented" }] } },
+    ]) {
+      await expect(readExtraction({ ...buySuspensionExtraction, sourceCoverage: null, ...patch }))
+        .rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    }
+  });
+});
 
 describe("captured extraction source evidence", () => {
   it.each(["COMPLETE", "BLOCKED", "UNKNOWN"] as const)("retains the SUCCEEDED candidate with %s source evidence", async (status) => {

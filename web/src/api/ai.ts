@@ -38,6 +38,10 @@ const extractionStatuses = new Set([
   "CANCELLED",
 ]);
 const validationSeverities = new Set(["ERROR", "WARNING"]);
+const currentExtractionPrompts = new Set([
+  "plan-extract-v8", "plan-extract-v9", "plan-extract-v10", "plan-extract-v11",
+  "plan-extract-v12", "plan-extract-v13",
+]);
 
 export function createAIPlanApi(
   fetchImplementation: typeof fetch = globalThis.fetch.bind(globalThis),
@@ -256,9 +260,10 @@ function isPlanExtraction(value: unknown): value is PlanExtractionView {
       isBoundedToken(value.model, 200) &&
       isBoundedToken(value.promptVersion, 64) &&
       isBoundedText(value.draftPlanJson, 4 * 1024 * 1024) &&
+      extractionDocumentMatches(value) &&
       extractionSourceMatches(value) &&
       Array.isArray(value.evidence) &&
-      (["plan-extract-v8", "plan-extract-v9", "plan-extract-v10", "plan-extract-v11", "plan-extract-v12"].includes(value.promptVersion)
+      (currentExtractionPrompts.has(value.promptVersion)
         ? value.evidence.length === 0 && isRecord(value.dailyMapping) && value.mapping == null
         : ["plan-extract-v4", "plan-extract-v5", "plan-extract-v6"].includes(value.promptVersion)
         ? value.evidence.length === 0 && isExtractionMapping(value.mapping)
@@ -299,7 +304,7 @@ function extractionSourceMatches(value: Record<string, unknown>): boolean {
   const source = value.sourceCoverage;
   if (source == null) return true;
   if (!isSourceCoverageSummary(source) || typeof value.promptVersion !== "string" ||
-    !["plan-extract-v8", "plan-extract-v9", "plan-extract-v10", "plan-extract-v11", "plan-extract-v12"].includes(value.promptVersion) ||
+    !currentExtractionPrompts.has(value.promptVersion) ||
     !isRecord(value.dailyMapping) || !isSha256(value.dailyMapping.candidate_content_hash) ||
     !Array.isArray(value.dailyMapping.supplements) || value.dailyMapping.supplements.length !== 0 ||
     source.sourceHash !== value.sourceTextSha256 || source.contentHash !== value.dailyMapping.candidate_content_hash ||
@@ -307,11 +312,43 @@ function extractionSourceMatches(value: Record<string, unknown>): boolean {
     source.coverageRevision !== null || source.coverageBundleHash !== null ||
     source.coverageReviewReceiptHash !== null || source.status === "LEGACY_UNASSESSED" ||
     typeof value.draftPlanJson !== "string") return false;
+  return extractionDocumentMatches(value);
+}
+
+function extractionDocumentMatches(value: Record<string, unknown>): boolean {
+  if (typeof value.draftPlanJson !== "string" || typeof value.promptVersion !== "string") return false;
   let draft: unknown;
   try { draft = JSON.parse(value.draftPlanJson); } catch { return false; }
-  return isRecord(draft) && typeof draft.schema_version === "number" &&
-    Number.isSafeInteger(draft.schema_version) && draft.schema_version >= 5 && draft.schema_version <= 9 &&
-    draft.execution_mode === "CONDITION_PLAN" && draft.execution_version === `condition-plan-v${draft.schema_version - 4}`;
+  if (!isRecord(draft)) return false;
+  if (value.promptVersion === "plan-extract-v13") {
+    // The public carrier is canonical draft JSON, not an extraction envelope.
+    // Review/activation and full strategy validation remain server-owned.
+    return draft.schema_version === 10 && draft.execution_mode === "CONDITION_PLAN" &&
+      draft.execution_version === "condition-plan-v6" && !("reference_market" in draft) &&
+      !("contract_version" in draft) && isBuySuspensionDraftDefinition(draft.buy_suspension) &&
+      isRecord(value.dailyMapping) && Array.isArray(value.dailyMapping.supplements) &&
+      value.dailyMapping.supplements.length === 0;
+  }
+  if (draft.schema_version === 10 || "buy_suspension" in draft) return false;
+  return !currentExtractionPrompts.has(value.promptVersion) ||
+    typeof draft.schema_version === "number" && Number.isSafeInteger(draft.schema_version) &&
+    draft.schema_version >= 5 && draft.schema_version <= 9 &&
+    draft.execution_mode === "CONDITION_PLAN" &&
+    draft.execution_version === `condition-plan-v${draft.schema_version - 4}`;
+}
+
+function isBuySuspensionDraftDefinition(value: unknown): boolean {
+  if (value == null) return true;
+  if (!isRecord(value) || !hasExactKeys(value, ["condition", "effective_from"])) return false;
+  const condition = value.condition;
+  if (condition !== null && (!isRecord(condition) ||
+    !hasExactKeys(condition, ["type", "timeframe_minutes", "price_fen"]) ||
+    condition.type !== "MINUTE_CLOSE_BELOW" || condition.timeframe_minutes !== 5 ||
+    !isBoundedInteger(condition.price_fen, 1, Number.MAX_SAFE_INTEGER))) return false;
+  if (value.effective_from === null) return true;
+  if (!isShanghaiDateTime(value.effective_from)) return false;
+  const boundary = /T\d{2}:(\d{2}):00(?:\.0{1,6})?\+08:00$/.exec(value.effective_from);
+  return boundary !== null && Number(boundary[1]) % 5 === 0;
 }
 
 function isExtractionMapping(value: unknown): boolean {
