@@ -150,6 +150,11 @@ def load_daily_draft_json(document):
         object_pairs_hook=_reject_duplicate_json_keys,
         parse_constant=_reject_json_constant,
     )
+    if isinstance(raw, dict) and raw.get("schema_version") == 10:
+        from trade_plan_monitor.domain.unified_plan_validation import BuySuspensionPlanDraft
+
+        _validate_data_tree(raw)
+        return BuySuspensionPlanDraft.model_validate(raw)
     if isinstance(raw, dict) and raw.get("schema_version") in {6, 7, 8, 9}:
         from trade_plan_monitor.domain.market_linkage_validation import parse_current_draft
 
@@ -219,7 +224,8 @@ def daily_draft_content_sha256(draft):
         data.pop(key)
     domain = {4: "daily-plan-review-content-v1", 5: "plan-review-content-v2",
               6: "plan-review-content-v3", 7: "plan-review-content-v4",
-              8: "plan-review-content-v5", 9: "plan-review-content-v6"}[draft.schema_version]
+              8: "plan-review-content-v5", 9: "plan-review-content-v6",
+              10: "plan-review-content-v7"}[draft.schema_version]
     return daily_hash(domain, data)
 
 
@@ -231,7 +237,7 @@ def daily_draft_issues(draft):
     if draft.schema_version == 8:
         from trade_plan_monitor.domain.p2_validation import p2_draft_issues
         return p2_draft_issues(draft)
-    if draft.schema_version in {5, 6, 7}:
+    if draft.schema_version in {5, 6, 7, 10}:
         from trade_plan_monitor.domain.unified_plan_validation import unified_plan_issues
 
         return unified_plan_issues(draft)

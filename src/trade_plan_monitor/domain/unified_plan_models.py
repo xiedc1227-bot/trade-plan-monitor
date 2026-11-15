@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from trade_plan_monitor.domain.daily_plan_models import (
     DailyActivation,
@@ -34,6 +34,7 @@ from trade_plan_monitor.domain.daily_plan_models import (
     required_daily_observations,
 )
 from trade_plan_monitor.domain.risk_scope import RiskHoldingScope, risk_identity
+from trade_plan_monitor.market_data.models import ShanghaiDatetime
 
 
 class MinuteCloseInRange(DailyValue):
@@ -55,6 +56,21 @@ class MinuteCloseBelow(DailyValue):
     type: Literal["MINUTE_CLOSE_BELOW"]
     timeframe_minutes: Literal[5]
     price_fen: Fen
+
+
+class BuySuspensionDefinition(DailyValue):
+    """One plan-wide persistent BUY guard; recovery is reviewed replacement only."""
+
+    condition: MinuteCloseBelow
+    effective_from: ShanghaiDatetime
+
+    @field_validator("effective_from")
+    @classmethod
+    def explicit_five_minute_start(cls, value):
+        # Nullable draft definitions reuse the same boundary rule.
+        if value is not None and (value.minute % 5 or value.second or value.microsecond):
+            raise ValueError("buy suspension start must be an exact five-minute boundary")
+        return value
 
 
 class MinuteVolumeToMeanGte(DailyValue):
@@ -371,3 +387,11 @@ class UnifiedTradePlan(DailyTradePlan):
                     ):
                         raise ValueError("daily condition history exceeds 500 observations")
         return self
+
+
+class BuySuspensionTradePlan(UnifiedTradePlan):
+    """Schema5 ordinary capabilities plus one optional persistent BUY guard."""
+
+    schema_version: Literal[10] = 10
+    execution_version: Literal["condition-plan-v6"] = "condition-plan-v6"
+    buy_suspension: BuySuspensionDefinition | None = None

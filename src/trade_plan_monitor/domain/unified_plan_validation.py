@@ -18,6 +18,9 @@ from trade_plan_monitor.domain.daily_plan_validation import (
 )
 from trade_plan_monitor.domain.risk_scope import RiskHoldingScope
 from trade_plan_monitor.domain.unified_plan_models import (
+    BuySuspensionDefinition,
+    BuySuspensionTradePlan,
+    MinuteCloseBelow,
     UnifiedCondition,
     UnifiedConfirmation,
     UnifiedExecutionPolicy,
@@ -27,6 +30,7 @@ from trade_plan_monitor.domain.unified_plan_models import (
     UnifiedTradePlan,
     UnifiedValidity,
 )
+from trade_plan_monitor.market_data.models import ShanghaiDatetime
 
 
 class UnifiedDraftRule(DailyValue):
@@ -99,6 +103,8 @@ class UnifiedPlanDraft(DailyPlanDraft):
 
     @classmethod
     def from_executable(cls, plan):
+        if cls is UnifiedPlanDraft and plan.schema_version == 10:
+            return BuySuspensionPlanDraft.from_executable(plan)
         if cls is UnifiedPlanDraft and plan.schema_version == 9:
             from trade_plan_monitor.domain.market_linkage_validation import P3PlanDraft
             return P3PlanDraft.from_executable(plan)
@@ -114,9 +120,30 @@ class UnifiedPlanDraft(DailyPlanDraft):
         return cls.model_validate(plan.model_dump(mode="json"))
 
 
+class BuySuspensionDraftDefinition(BuySuspensionDefinition):
+    """Preserve unresolved guard inputs without granting executable authority."""
+
+    condition: MinuteCloseBelow | None
+    effective_from: ShanghaiDatetime | None
+
+
+class BuySuspensionPlanDraft(UnifiedPlanDraft):
+    schema_version: Literal[10] = 10
+    execution_version: Literal["condition-plan-v6"] = "condition-plan-v6"
+    buy_suspension: BuySuspensionDraftDefinition | None = None
+
+    def to_executable(self) -> BuySuspensionTradePlan | None:
+        try:
+            return BuySuspensionTradePlan.model_validate(self.executable_payload())
+        except ValidationError:
+            return None
+
+
 def unified_plan_issues(draft):
     try:
-        if draft.schema_version == 7:
+        if draft.schema_version == 10:
+            BuySuspensionTradePlan.model_validate(draft.executable_payload())
+        elif draft.schema_version == 7:
             from trade_plan_monitor.domain.market_exception_models import MarketExceptionTradePlan
             MarketExceptionTradePlan.model_validate(draft.executable_payload())
         elif draft.schema_version == 6:
