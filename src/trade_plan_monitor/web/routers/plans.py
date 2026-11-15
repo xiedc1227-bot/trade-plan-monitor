@@ -686,12 +686,15 @@ class PlanExtractionView(ApiValue):
                 raise ValueError("successful extraction requires complete review data")
             plan_json = cast(str, self.draft_plan_json)
             plan = _load_reviewable_plan(plan_json)
+            compatible = (
+                self.prompt_version == "plan-extract-v13" and plan.schema_version == 10
+                or self.prompt_version in {"plan-extract-v8", "plan-extract-v9",
+                    "plan-extract-v10", "plan-extract-v11", "plan-extract-v12"}
+                and plan.schema_version in {5, 6, 7, 8, 9}
+            )
             if (
-                self.prompt_version
-                not in {"plan-extract-v8", "plan-extract-v9",
-                        "plan-extract-v10", "plan-extract-v11", "plan-extract-v12"}
+                not compatible
                 or not isinstance(plan, DailyPlanDraft)
-                or plan.schema_version not in {5, 6, 7, 8, 9}
                 or self.daily_mapping is None
                 or self.daily_mapping.supplements
                 or self.mapping is not None

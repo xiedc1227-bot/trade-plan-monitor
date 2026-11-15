@@ -160,7 +160,7 @@ class AIConfiguration(_ConfigurationModel):
     temperature: float = Field(default=0, ge=0, le=0.3)
     prompt_version: Literal[
         "plan-extract-v8", "plan-extract-v9", "plan-extract-v10",
-        "plan-extract-v11", "plan-extract-v12"
+        "plan-extract-v11", "plan-extract-v12", "plan-extract-v13"
     ] = (
         "plan-extract-v12"
     )

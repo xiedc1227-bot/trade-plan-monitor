@@ -23,8 +23,13 @@ from trade_plan_monitor.ai.models import (
     PlanExtractionResult,
     PlanExtractionStatus,
 )
-from trade_plan_monitor.ai.plan_extraction import CurrentPlanExtractionOutput
+from trade_plan_monitor.ai.plan_extraction import (
+    BuySuspensionPlanExtractionOutput,
+    BuySuspensionPlanExtractionResult,
+    CurrentPlanExtractionOutput,
+)
 from trade_plan_monitor.ai.prompts import (
+    BUY_SUSPENSION_PROMPT_VERSION,
     PLAN_EXTRACTION_PROMPT_VERSION,
     build_plan_extraction_prompt,
 )
@@ -62,7 +67,9 @@ async def extract_plan(
 ) -> PlanExtractionResult:
     """Extract one review-only draft without persistence or activation side effects."""
 
-    config = config.model_copy(update={"prompt_version": PLAN_EXTRACTION_PROMPT_VERSION})
+    suspension = config.prompt_version == BUY_SUSPENSION_PROMPT_VERSION
+    config = config.model_copy(update={"prompt_version": (
+        BUY_SUSPENSION_PROMPT_VERSION if suspension else PLAN_EXTRACTION_PROMPT_VERSION)})
     prompt = build_plan_extraction_prompt(
         source_text,
         prompt_version=config.prompt_version,
@@ -73,7 +80,7 @@ async def extract_plan(
         config=config,
         provider=provider,
         prompt=prompt,
-        output_model=CurrentPlanExtractionOutput,
+        output_model=BuySuspensionPlanExtractionOutput if suspension else CurrentPlanExtractionOutput,
     )
     if isinstance(result, PlanExtractionResult):
         return result
@@ -306,7 +313,10 @@ def _review_current_output(output, source_text, request_id, config, raw):
         known = {(i.code, i.path, i.message) for i in validation_issues}
         validation_issues += tuple(_blocking_warning(i.code, i.path, i.message)
             for i in coverage.issues if (i.code, i.path, i.message) not in known)
-        return CurrentPlanExtractionResult(
+        result_model = (BuySuspensionPlanExtractionResult
+                        if isinstance(output, BuySuspensionPlanExtractionOutput)
+                        else CurrentPlanExtractionResult)
+        return result_model(
             request_id=request_id,
             provider_id=raw.provider_id,
             model=config.model,
