@@ -1,0 +1,9 @@
+{
+  "kind": "engineering-only-offline-fixture",
+  "explicit": "MINUTE_CLOSE_BELOW timeframe_minutes=5 price_fen=2420 effective_from=2026-09-30T09:30:00+08:00. After one completed close below the threshold, prohibit all further BUY under this plan until exact activation of an independently reviewed replacement. Never lower the risk line or buying zone.",
+  "unresolved": "再次跌破24.20后继续空仓，等待新底部结构；不得下移原风险线或低吸区。",
+  "originals": {
+    "03-20260930-095728.txt": "ed0addcd166735798111a6a22e9951270a2e4a8b1fc4448d0f49443baf8eb6bc",
+    "04-20261009-091956.txt": "e71ab6dbfda744c92358b14ffd1ef8c09b2af13d6a12f6bc2d0e3255ea4f7d2b"
+  }
+}

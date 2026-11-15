@@ -10,12 +10,18 @@ PLAN_EXTRACTION_PROMPT_V4: Final = "plan-extract-v4"
 PLAN_EXTRACTION_PROMPT_V5: Final = "plan-extract-v5"
 PLAN_EXTRACTION_PROMPT_V6: Final = "plan-extract-v6"
 PLAN_EXTRACTION_PROMPT_VERSION: Final = "plan-extract-v12"
+BUY_SUSPENSION_PROMPT_VERSION: Final = "plan-extract-v13"
 MAX_SOURCE_TEXT_CHARS: Final = 150_000
 
 
 def build_plan_extraction_prompt(source_text, *, prompt_version=PLAN_EXTRACTION_PROMPT_VERSION):
-    from trade_plan_monitor.ai.plan_extraction import build_current_plan_prompt
+    from trade_plan_monitor.ai.plan_extraction import (
+        build_buy_suspension_plan_prompt,
+        build_current_plan_prompt,
+    )
 
+    if prompt_version == BUY_SUSPENSION_PROMPT_VERSION:
+        return build_buy_suspension_plan_prompt(source_text)
     if prompt_version != PLAN_EXTRACTION_PROMPT_VERSION:
         raise ValueError("Historical extraction contracts are read-only audit metadata")
     return build_current_plan_prompt(source_text)

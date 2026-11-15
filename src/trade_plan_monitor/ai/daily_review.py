@@ -224,7 +224,7 @@ def semantic_values(draft):
             for index, child in enumerate(value):
                 visit(child, f"{path}[{index}]")
         elif value is not None or (
-            draft.schema_version in {5, 6, 7, 8, 9}
+            draft.schema_version in {5, 6, 7, 8, 9, 10}
             and path in {"levels.low_buy", "levels.pressure"}
         ):
             values[path] = value
@@ -265,7 +265,7 @@ _CONTRACT_VALUES = {
 
 
 def _contract_values(draft):
-    if draft.schema_version not in {5, 6, 7, 8, 9}:
+    if draft.schema_version not in {5, 6, 7, 8, 9, 10}:
         return _CONTRACT_VALUES
     return {
         **{
@@ -315,7 +315,7 @@ def _persistent_deadline_issues(draft, mapping):
     Exact clause review remains responsible for meaning outside these narrow cues.
     A scoped human conversion must quote each affected clause in its reason.
     """
-    if draft.schema_version not in {5, 6, 7, 8, 9}:
+    if draft.schema_version not in {5, 6, 7, 8, 9, 10}:
         return ()
     paths = {
         f"ordinary_rules[{i}].validity.mode": rule.side
@@ -614,14 +614,14 @@ def build_daily_review(draft, mapping, source_text):
                     semantic_interpretation_matches,
                 )
 
-                if (draft.schema_version not in {5, 6, 7, 8, 9}
+                if (draft.schema_version not in {5, 6, 7, 8, 9, 10}
                         or not semantic_interpretation_matches(
                             binding.path, actual, excerpt, draft)):
                     raise ValueError("semantic source value differs from its exact evidence")
             elif binding.origin == "SOURCE_INTERPRETATION":
                 from trade_plan_monitor.ai.source_resolution import interpretation_matches
 
-                if draft.schema_version not in {5, 6, 7, 8, 9} or not interpretation_matches(
+                if draft.schema_version not in {5, 6, 7, 8, 9, 10} or not interpretation_matches(
                     binding.path,
                     actual,
                     excerpt,
@@ -636,7 +636,7 @@ def build_daily_review(draft, mapping, source_text):
                     raise MappingValidationError(
                         "source price does not match exact yuan amount", diagnostic_path + ".unit"
                     )
-            elif type(actual) is bool and draft.schema_version in {5, 6, 7, 8, 9}:
+            elif type(actual) is bool and draft.schema_version in {5, 6, 7, 8, 9, 10}:
                 literal = excerpt.strip(" \t\r\n。；;.")
                 if not binding.path.endswith((".include_low", ".include_high")) or not re.fullmatch(
                     re.escape(binding.path) + r"\s*=\s*" + str(actual).lower(),
@@ -645,7 +645,7 @@ def build_daily_review(draft, mapping, source_text):
                     raise ValueError(
                         "range boundary requires an explicit scoped source declaration"
                     )
-            elif actual == [] and type(actual) is list and draft.schema_version in {5, 6, 7, 8, 9}:
+            elif actual == [] and type(actual) is list and draft.schema_version in {5, 6, 7, 8, 9, 10}:
                 labels = {
                     "ordinary_rules": "普通规则",
                     "risk_branches": "风险分支",
@@ -674,7 +674,7 @@ def build_daily_review(draft, mapping, source_text):
         issues.extend(p2_review_issues(draft))
     issues.extend(_persistent_deadline_issues(draft, mapping))
     unbound_paths = values.keys() - bound
-    for path in sorted(unbound_paths) if draft.schema_version in {5, 6, 7, 8, 9} else unbound_paths:
+    for path in sorted(unbound_paths) if draft.schema_version in {5, 6, 7, 8, 9, 10} else unbound_paths:
         issues.append(
             {
                 "path": path,
