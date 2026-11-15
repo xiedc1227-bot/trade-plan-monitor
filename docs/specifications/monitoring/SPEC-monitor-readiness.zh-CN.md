@@ -202,3 +202,19 @@
 验收使用公开整笔模拟、真实 producer 随后的 FALSE，以及尚未到达的未来确认。验证官方收盘及之后日期的分钟等待、准确原始记录不匹配、不完整/较晚消费、真实原生日期/时间提前返回、后继已有 occurrence、部分历史缺失、日期限制及两次读取变化。保留原 FALSE 时间/target/evidence 及既有新鲜度边界。这只是逐后继 WAIT：已消费且没有新比较的前驱、未验证的通知服务仍为 UNKNOWN。不增加维护/通知 WAIT 或整体 READY。不修改模型、摘要、查询、表/索引、策略、采集或公开契约。
 
 既有人工输入排除回归为 `tests/integration/test_plan_readiness_confirmation.py::test_real_missing_human_leaf_is_not_relabelled_as_future_wait`：真实接纳的 `ONCE_PER_RULE` 规则具有原生 FALSE 根及缺失人工叶，保持 `MISSING_INPUT` 且不产生未来等待。它覆盖未改动的共用人工输入门禁，不代表端到端 `AFTER_RULE_COMPLETED` 人工来源场景。本片未验收此类已获来源接纳的人工场景；依赖人工的等待仍被保守排除。不得补造来源审批来扩大这一验收声明。
+
+## MRD-S11 — PBS 只读持续禁买投影
+
+已批准的 [PBS 规格](SPEC-plan-buy-suspension.zh-CN.md)在既有 `GET /api/v1/plan-versions/{version_id}/monitor-readiness` 响应中增加可选的 `snapshot.buySuspension`。没有适用扩展时省略该字段，旧的无扩展载荷保持原有结构。保留 `plan-monitor-readiness-v1`、六轴、76个 owner、50个叶子、1MiB 响应上限及字面量 `authorityGranted=false`。T10负责两种生成的公共契约及增量兼容检查，T11负责既有审核／就绪组件。本投影不增加公共冻结格式、页面或解锁操作。
+
+`ReadinessBuySuspension` 保留原生定义、原始 `ownerPlanVersionId`／`ownerHash` 及 `birthActivationRevision`、可选的原生 `state` 及正数 `stateRevision`、由当前日历确定的 `target`、观察结果 `outcome`、`maintenance`、`blocker`、确切 `skippedRules`、`strategyEffectiveFrom` 及可选原生 `replacement` 凭据。嵌入的原生值保留自身字段名和校验。`outcome` 为 `UNVERIFIED`、`CLEAR_THROUGH_TARGET` 或 `LATCHED`；明确废止且没有新保护时为 null。建立当前证明前，存储中的通过状态只是历史证据。即使不能认证当前监控，历史有效触发仍保持 `LATCHED`。
+
+通过 `resolve_buy_suspension_context` 分别解析实际启用前序和原保护 owner；普通续版读取原 owner 的记录、定义及出生修订。核对原生 content／source／review／definition 与该 owner 一致，并保留 `guard_owner_hash`。定义存在但没有 `BUY_SUSPENSION` 行时为未核实：state及求值修订均为 null，包括日历尚不能确定首个 target 的情形。GET不初始化记录。接替凭据表达前序记录缺失时，则严格使用 `predecessor_state_revision=0` 及 `predecessor_state_hash=null`，并明确确认原未核实区间；两种表达不能混淆。单独审核不能接替当前前序。明确废止启用后仍保留 `strategyEffectiveFrom`，不能在该起点前允许BUY。
+
+确切原生 `BUY_SUSPENSION_LATCHED` 抑制，或已有证明的未来接替策略起点，可以得到逐规则 `BUY_SUSPENDED`。核对实际 owner、仓储修订、当前完整K线 target、启用审核／版本、runtime generation和既有不可变 completion proof，以及确切原生 `buy_suspension_*` 字段和被跳过的BUY身份。保留缺失的比较时间／根及未知诊断叶子，不能补造TRUE／FALSE或预期确认。其他规则保留自身条件和执行事实。即使提供的 maintenance 观察为PASS，守护证明缺失／未核实仍计为UNKNOWN，且 `freshUntil` 为null；不改变独立SELL的比较。守护已核查通过只表示通过本保护，不授予交易权限。
+
+对Schema10普通规则，MRD-S09的唯一原生IN_APP服务子集进一步允许原生动作集合为空，且各规则为真正完整FALSE或确切证明的 `BUY_SUSPENDED`。仍须满足全部原有当前服务／configuration／completion／expiry校验、signals／risks／exception candidates为空及确切无风险动作检查。单独跳过BUY不能证明服务健康；投递义务未解决或仍存在时保持UNKNOWN。不推导新的发送或投递资格。
+
+GET使用既有归属SQL快照和有界启用解析器。前后读取绑定包括前序／原owner身份、出生／当前启用修订、definition／source／review绑定、保护记录存在性／修订／state hash、当前target及日历行、策略起点、接替凭据和原生抑制字段。相关变化消耗既有有界重试；重试耗尽后撤销当前性并清除当前跳过声明，同时保留历史触发证据。临时 `DailyRepository` 读取器使用 `id_factory=None`，不注册为失效写入者。刷新前精确拒绝保护行待提交的修改／删除／改名，不覆盖会话改动。GET不采集、不恢复、不转移状态、不执行业务SQL写入、不补记录、不续期游标，也不调用BUY提交谓词；不增加分钟历史扫描。
+
+隔离验收覆盖两种公共契约、拦截SQL／网络／状态转移并比对全部表及结构的重复相同GET、原owner继承、缺状态／日历、真实SELL比较、只审核未启用的接替、零修订凭据、未来废止起点、owner停止后的历史及真实保护修订竞争。PBS工程证据不关闭原始03/04的其他来源义务、F083/C05或历史PMA门禁。
