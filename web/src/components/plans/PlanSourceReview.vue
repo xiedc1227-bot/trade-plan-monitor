@@ -134,4 +134,5 @@ const canConfirm = computed(() => props.canConfirmReview === true && props.saved
 .daily-review__row { min-width: 0; overflow-wrap: anywhere; padding: var(--space-4); border-bottom: var(--border-technical); }
 textarea, select, input:not([type="checkbox"]) { box-sizing: border-box; max-width: 100%; width: 100%; }
 .daily-review__actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+label:has(input[type="checkbox"]) { min-height: 44px; display: flex; align-items: center; gap: var(--space-2); }
 </style>
