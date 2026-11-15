@@ -113,10 +113,47 @@ def _maintained_ordinary_skip(rule, snapshot, *, owner_current):
             book=rule.requirements.simulation_book) is None)
 
 
+def _guard_current(guard, snapshot):
+    if guard is None:
+        return True
+    if (guard.maintenance.state != "PASS"
+            or _observation_reason(guard.maintenance.observation, snapshot.context,
+                                   snapshot.computed_at) is not None):
+        return False
+    if guard.outcome is None:
+        return (guard.definition is None and guard.owner_plan_version_id is None
+                and guard.state is None and guard.strategy_effective_from is not None)
+    state = guard.state
+    if (state is None or guard.owner_hash is None or guard.target is None
+            or guard.target > snapshot.computed_at or state.evaluated_at > snapshot.computed_at):
+        return False
+    return guard.outcome == "LATCHED" or (
+        guard.outcome == "CLEAR_THROUGH_TARGET" and state.target == guard.target
+        and guard.blocker is None)
+
+
+def maintained_buy_skip(rule, snapshot, *, owner_current):
+    """An owned native suppression is not a completed condition comparison."""
+    guard = snapshot.buy_suspension
+    return bool(owner_current and guard is not None
+        and _guard_current(guard, snapshot)
+        and (guard.outcome == "LATCHED" and guard.blocker == "BUY_SUSPENSION_LATCHED"
+             or guard.blocker == "STRATEGY_START_NOT_REACHED"
+             and guard.strategy_effective_from is not None
+             and snapshot.computed_at < guard.strategy_effective_from)
+        and rule.owner_kind == "ORDINARY_RULE" and rule.side == "BUY"
+        and rule.owner_id in guard.skipped_rules
+        and rule.root_outcome is None and rule.evaluated_at is None
+        and rule.evaluated_target is None and rule.expected_confirmation is None
+        and all(leaf.state == "UNKNOWN" for leaf in rule.leaves))
+
+
 def _rule(rule, snapshot, *, owner_current):
     def result(state, reason=None):
         return RuleReadiness(facts=rule, state=state, reason=reason)
 
+    if maintained_buy_skip(rule, snapshot, owner_current=owner_current):
+        return result("BUY_SUSPENDED", snapshot.buy_suspension.blocker)
     if _maintained_ordinary_skip(rule, snapshot, owner_current=owner_current):
         return result("UNKNOWN")  # Actual maintenance, without a new comparison.
     wait = rule.expected_confirmation
@@ -196,6 +233,9 @@ def summarize_readiness(snapshot: ReadinessSnapshot) -> ReadinessAssessment:
         result.state in {"UNKNOWN", "AWAITING_FIRST_EVALUATION"}
         and not _maintained_ordinary_skip(result.facts, snapshot, owner_current=owner_current)
         for result in rules)
+    guard = snapshot.buy_suspension
+    guard_current = _guard_current(guard, snapshot)
+    unknown = unknown or not guard_current
     service_wait = any(axis.state == "WAIT" and axis.reason == "SERVICE_PENDING" for axis in axes)
     confirmation_wait = "WAITING_OFFICIAL_CONFIRMATION" in states
     if any(axis.state == "WAIT" and axis.reason == "EXPECTED_CONFIRMATION" for axis in axes):
@@ -208,10 +248,13 @@ def summarize_readiness(snapshot: ReadinessSnapshot) -> ReadinessAssessment:
     observations = tuple(
         axis.observation for axis in axes if axis.state != "NOT_APPLICABLE") + tuple(
         rule.expected_confirmation.observation if rule.expected_confirmation is not None
+        else guard.maintenance.observation if maintained_buy_skip(
+            rule, snapshot, owner_current=owner_current)
         else rule.risk.maintenance.observation if rule.risk is not None
         and rule.risk.current is None else rule.observation for rule in snapshot.rules) + tuple(
         rule.risk.maintenance.observation for rule in snapshot.rules
-        if rule.risk is not None and rule.risk.current is not None)
+        if rule.risk is not None and rule.risk.current is not None) + (
+        () if guard is None else (guard.maintenance.observation if guard_current else None,))
     fresh_until = None
     if observations and all(
         item is not None and item.expires_at is not None

@@ -11,6 +11,7 @@ import httpx
 import pytest
 import requests
 from sqlalchemy import event
+from tests.integration.test_plan_buy_suspension_recovery import chain as _suspension_chain
 from tests.integration.test_plan_readiness_execution_reads import execution_case as execution_case
 from tests.integration.test_runtime_status_projection import _current_status
 from tests.integration.test_source_action_cutover import legacy as legacy
@@ -18,10 +19,281 @@ from tests.integration.test_source_coverage_authority import _confirm, _save
 from tests.integration.test_source_coverage_authority_save import _NOW
 from tests.integration.test_source_coverage_authority_save import state as state
 
+suspension_chain = _suspension_chain
+
 AXES = {
     "SOURCE_COVERAGE", "REVIEW_ACTIVATION", "RUNTIME_OWNERSHIP",
     "DATA_EVALUATION", "INVENTORY_CAPITAL", "NOTIFICATION_DELIVERY",
 }
+
+
+@pytest.fixture
+def guarded_read_case(request, monkeypatch):
+    from functools import partial
+
+    from tests.integration.test_plan_buy_suspension_activation import (
+        guard_draft,
+        public_activate,
+        public_production_guard,
+    )
+    from tests.integration.test_plan_buy_suspension_recovery import advance
+    from tests.integration.test_plan_buy_suspension_runtime import inputs
+    from tests.integration.test_plan_readiness_notification_service import ProgressOwner
+
+    from trade_plan_monitor.runtime.status_authority import RuntimeReadAuthority
+    from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
+
+    chain = request.getfixturevalue("suspension_chain")
+    mode = getattr(request, "param", "latched")
+    if mode == "sell-missing":
+        from tests.integration.test_plan_buy_suspension_runtime import prepare
+        pipeline, saved = prepare(chain, side="SELL"), chain.version
+    else:
+        pipeline, saved = public_production_guard(chain)
+    sessions = chain.plans._unit_of_work()._session_factory
+    # Install the native post-commit proof observer, never a fabricated proof.
+    pipeline._runtime_status_enabled = True
+    pipeline._runtime_status_sessions = sessions
+    pipeline.daily_evaluations._observe = pipeline._observe_status_commit
+    progress_owner = ProgressOwner(pipeline._runtime_generation, pipeline._clock)
+    progress = progress_owner.tracker
+    if mode in {"latched", "inherited"}:
+        chain.sdk.breach = chain.now.replace(minute=35, second=0, microsecond=0)
+    row = advance(chain)
+    original_version = saved["id"]
+    if mode == "inherited":
+        saved = public_activate(chain, guard_draft(chain, plan_id="ordinary-continuation"))
+    if mode == "retired-future":
+        saved = public_activate(chain,
+            guard_draft(chain, plan_id="explicit-retirement", retire=True),
+            replacement=True, retire=True, start=chain.now + timedelta(minutes=5))
+    captured = inputs(chain, revision=row["revision"]).model_copy(update={
+        "runtime_generation": str(pipeline._runtime_generation)})
+    with chain.plans._unit_of_work() as work:
+        for bar in captured.five_minute_bars:
+            work.history.upsert_five_minute(**bar.model_dump())
+        if mode in {"missing", "sell-missing"}:
+            from trade_plan_monitor.state.daily_models import DailyRecord
+            work.daily.session.delete(work.daily.session.get(DailyRecord, row["id"]))
+        work.commit()
+    if mode in {"missing", "sell-missing", "retired-future"}:
+        captured = captured.model_copy(update={"buy_suspension_revision": None})
+    token = progress.begin_step(timeout_seconds=30)
+    result = chain.client.portal.call(partial(pipeline.daily_evaluations.run_inputs,
+        plan=chain.plan, inputs=captured))
+    progress.complete_step(token, next_wake_at=chain.now + timedelta(seconds=30))
+    from trade_plan_monitor.notifications.channels import InAppChannel
+    from trade_plan_monitor.notifications.dispatcher import NotificationDispatcher
+    from trade_plan_monitor.web.monitor_composition import _ProductionRuntimeState
+
+    dispatcher = NotificationDispatcher(sessions, channels=(InAppChannel(),),
+        clock=lambda: chain.now)
+    state = _ProductionRuntimeState(config_path=chain.config, database_path=chain.database,
+        engine=sessions.kw["bind"], session_factory=sessions, clock=pipeline._clock,
+        request_controller=pipeline._controller, dispatcher=dispatcher,
+        runtime_generation=lambda: pipeline._runtime_generation,
+        progress_owner=lambda: progress_owner)
+    state._pipeline = pipeline
+    if mode in {"latched", "inherited", "retired-future"}:
+        # Perform the real local storage check before observing it. No event is sent.
+        check_context = state._notification_context()
+        chain.client.portal.call(dispatcher.dispatch_pending)
+        state._bind_notification_check(check_context)
+    frozen = [None]
+
+    def authority():
+        if frozen[0] is not None:
+            return frozen[0]
+        token, configuration, plans = pipeline.runtime_status_snapshot()
+        return RuntimeReadAuthority(token=token, lifecycle="RUNNING", health=None,
+            progress=progress.snapshot(), configuration_revision=configuration, plans=plans,
+            notification_configuration=state.notification_configuration_snapshot(),
+            notification_service=state.notification_service_snapshot(
+                runtime_generation=pipeline._runtime_generation,
+                configuration_revision=configuration, plans=plans))
+
+    owner = authority()
+    assert owner.plans[0].completion is not None
+    sessions = pipeline._runtime_status_sessions
+    reader = RuntimeStatusReadService(sessions, authority, clock=lambda: chain.now)
+    case = SimpleNamespace(chain=chain, pipeline=pipeline, row=row, result=result,
+        sessions=sessions, engine=sessions.kw["bind"], reader=reader, owner=authority,
+        frozen=frozen, version=saved["id"], mode=mode, original_version=original_version,
+        captured=captured, progress=progress)
+    yield case
+    chain.client.portal.call(reader.stop)
+
+
+@pytest.mark.parametrize("guarded_read_case", ["latched", "clear", "missing"], indirect=True)
+def test_buy_suspension_reads_real_state_suppression_and_absence(guarded_read_case):
+    case = guarded_read_case
+    result = asyncio.run(case.reader.get_plan_readiness(version_id=case.version))
+    guard = result.snapshot.buy_suspension
+    assert guard is not None and guard.owner_plan_version_id == case.version
+    assert guard.birth_activation_revision == 1
+    assert guard.definition.condition.price_fen == 2420
+    assert result.authority_granted is False and len(result.axes) == 6
+    if case.mode == "missing":
+        assert guard.outcome == "UNVERIFIED" and guard.state is None
+        assert guard.state_revision is None and guard.maintenance.state == "UNKNOWN"
+    else:
+        assert guard.state_revision >= case.row["revision"]
+        assert guard.maintenance.state == "PASS"
+        assert guard.outcome == ("LATCHED" if case.mode == "latched" else "CLEAR_THROUGH_TARGET")
+        if case.mode == "latched":
+            assert result.rules[0].state == "BUY_SUSPENDED"
+            assert result.rules[0].facts.root_outcome is None
+            assert next(a for a in result.axes if a.axis == "DATA_EVALUATION").state == "PASS"
+            assert result.summary == "READY_FOR_MONITORING"
+
+
+@pytest.mark.parametrize("guarded_read_case", ["inherited", "retired-future"], indirect=True)
+def test_buy_suspension_inherited_owner_and_explicit_retirement_start(guarded_read_case):
+    case = guarded_read_case
+    result = asyncio.run(case.reader.get_plan_readiness(version_id=case.version))
+    guard = result.snapshot.buy_suspension
+    assert case.version != case.original_version
+    assert guard.maintenance.state == "PASS"
+    assert result.rules[0].state == "BUY_SUSPENDED"
+    if case.mode == "inherited":
+        assert guard.owner_plan_version_id == case.original_version
+        assert guard.birth_activation_revision == 1
+        assert guard.state.trigger.close_fen == 2419
+    else:
+        assert guard.owner_plan_version_id is None and guard.state is None
+        assert guard.outcome is None and guard.blocker == "STRATEGY_START_NOT_REACHED"
+        assert guard.strategy_effective_from == case.chain.now + timedelta(minutes=5)
+        assert guard.replacement.predecessor_guard_owner_plan_version_id == case.original_version
+
+
+def test_buy_suspension_revision_churn_revokes_currency_without_erasing_trigger(
+    guarded_read_case, monkeypatch,
+):
+    from trade_plan_monitor.web import plan_readiness_service as projection
+
+    case = guarded_read_case
+    original = projection.read_plan_readiness
+    revisions = []
+
+    def changed(*args, **kwargs):
+        result = original(*args, **kwargs)
+        with case.chain.plans._unit_of_work() as work:
+            row = work.daily.get_buy_suspension(symbol=case.chain.plan.symbol,
+                owner_plan_version_id=case.original_version)
+            work.daily.save(row["id"], kind="BUY_SUSPENSION", symbol=row["symbol"],
+                lineage=row["lineage"], expected_revision=row["revision"], payload=row["payload"])
+            work.commit()
+            revisions.append(row["revision"])
+        return result
+
+    monkeypatch.setattr(projection, "read_plan_readiness", changed)
+    result = asyncio.run(case.reader.get_plan_readiness(version_id=case.version))
+    assert len(revisions) == 2 and revisions[1] > revisions[0]
+    assert result.snapshot.buy_suspension.state.trigger.close_fen == 2419
+    assert result.snapshot.buy_suspension.maintenance.reason == "CONTEXT_CHANGED"
+    assert result.fresh_until is None and result.summary == "UNKNOWN"
+
+
+def test_buy_suspension_stopped_owner_keeps_trigger_but_revokes_health(guarded_read_case):
+    case = guarded_read_case
+    case.frozen[0] = replace(case.owner(), lifecycle="STOPPED")
+    result = asyncio.run(case.reader.get_plan_readiness(version_id=case.version))
+    assert result.snapshot.buy_suspension.state.trigger.close_fen == 2419
+    assert result.snapshot.buy_suspension.outcome == "LATCHED"
+    assert result.snapshot.buy_suspension.maintenance.state == "UNKNOWN"
+    assert result.summary == "UNKNOWN" and result.fresh_until is None
+
+
+@pytest.mark.parametrize("pending", ["payload", "identity", "delete"])
+def test_buy_suspension_read_preserves_pending_guard_changes(guarded_read_case, pending):
+    import json
+
+    from trade_plan_monitor.state.daily_models import DailyRecord
+    from trade_plan_monitor.web.plan_readiness_service import read_plan_readiness
+
+    case = guarded_read_case
+    writes = []
+
+    def readonly(connection, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().split()[0].upper() in {"INSERT", "UPDATE", "DELETE", "REPLACE"}:
+            writes.append(statement)
+            raise AssertionError("pending read flushed business state")
+
+    with case.sessions() as session, session.begin():
+        row = session.get(DailyRecord, case.row["id"])
+        if pending == "payload":
+            payload = json.loads(row.payload_json)
+            payload["evaluated_at"] = (case.chain.now + timedelta(seconds=1)).isoformat()
+            row.payload_json = json.dumps(payload)
+        elif pending == "identity":
+            row.id = "pending-rename"
+        else:
+            session.delete(row)
+        before = row.id, row.payload_json
+        event.listen(case.engine, "before_cursor_execute", readonly)
+        try:
+            with session.no_autoflush:
+                read_plan_readiness(session, case.owner(), case.version, case.chain.now)
+            assert (row.id, row.payload_json) == before
+            assert row in (session.deleted if pending == "delete" else session.dirty)
+        finally:
+            event.remove(case.engine, "before_cursor_execute", readonly)
+            session.rollback()
+    assert writes == []
+
+
+@pytest.mark.parametrize("guarded_read_case", ["sell-missing"], indirect=True)
+def test_buy_suspension_missing_guard_does_not_replace_actual_sell_comparison(guarded_read_case):
+    case = guarded_read_case
+    result = asyncio.run(case.reader.get_plan_readiness(version_id=case.version))
+    sell = result.rules[0]
+    assert sell.facts.side == "SELL" and sell.state == "CONDITION_TRUE"
+    assert sell.facts.root_outcome == "SATISFIED"
+    assert case.result.snapshot["signals"][0]["executable_qty"] == 100
+    assert sell.facts.execution.reason not in {
+        "BUY_SUSPENSION_LATCHED", "BUY_SUSPENSION_UNVERIFIED", "HISTORY_PENDING"}
+    assert result.snapshot.buy_suspension.outcome == "UNVERIFIED"
+
+
+@pytest.mark.parametrize("guarded_read_case", ["missing"], indirect=True)
+def test_buy_suspension_reviewed_absent_predecessor_receipt_does_not_recover(guarded_read_case):
+    from tests.integration.test_plan_buy_suspension_activation import guard_draft, public_review
+
+    case = guarded_read_case
+    saved, _command = public_review(case.chain,
+        guard_draft(case.chain, plan_id="reviewed-only-retirement", retire=True),
+        replacement=True, retire=True)
+    result = asyncio.run(case.reader.get_plan_readiness(version_id=saved["id"]))
+    guard = result.snapshot.buy_suspension
+    assert guard.maintenance.state == "UNKNOWN" and guard.state is None
+    assert guard.replacement.predecessor_state_revision == 0
+    assert guard.replacement.predecessor_state_hash is None
+    assert guard.replacement.predecessor_guard_owner_plan_version_id == case.original_version
+    assert guard.replacement.predecessor_guard_owner_hash is not None
+    assert result.summary == "NEEDS_REVIEW" and result.authority_granted is False
+    with case.chain.plans._unit_of_work() as work:
+        active = work.plans.get_active(case.chain.plan.symbol)
+        assert active.plan_version_id == case.original_version
+        assert work.daily.get_buy_suspension(symbol=case.chain.plan.symbol,
+            owner_plan_version_id=case.original_version) is None
+
+
+def test_buy_suspension_missing_calendar_keeps_latch_without_current_monitoring(guarded_read_case):
+    from sqlalchemy import delete
+
+    from trade_plan_monitor.state.models import TradingCalendar
+
+    case = guarded_read_case
+    with case.chain.plans._unit_of_work() as work:
+        work.daily.session.execute(delete(TradingCalendar).where(
+            TradingCalendar.exchange == case.chain.plan.market,
+            TradingCalendar.cal_date == case.chain.now.date()))
+        work.commit()
+    result = asyncio.run(case.reader.get_plan_readiness(version_id=case.version))
+    guard = result.snapshot.buy_suspension
+    assert guard.target is None and guard.outcome == "LATCHED"
+    assert guard.state.trigger.close_fen == 2419 and guard.maintenance.state == "UNKNOWN"
+    assert result.summary == "UNKNOWN" and result.fresh_until is None
 
 
 @pytest.fixture

@@ -16,6 +16,8 @@ from tests.integration.test_plan_readiness_profile_ownership import (
     owned_reader,
     start_current,
 )
+from tests.integration.test_plan_readiness_reads import guarded_read_case as guarded_read_case
+from tests.integration.test_plan_readiness_reads import suspension_chain as suspension_chain
 from tests.integration.test_source_action_cutover import legacy as legacy
 from tests.integration.test_source_coverage_authority_save import _NOW
 from tests.integration.test_source_coverage_authority_save import state as state
@@ -26,6 +28,82 @@ from trade_plan_monitor.web.persistent_monitor_read_service import PersistentMon
 from trade_plan_monitor.web.runtime_status_read_service import RuntimeStatusReadService
 
 PATH = "/api/v1/plan-versions/{}/monitor-readiness"
+
+
+@pytest.mark.parametrize("profile", [1, 2])
+@pytest.mark.parametrize("guarded_read_case", ["latched", "missing"], indirect=True)
+def test_buy_suspension_http_repeated_get_has_zero_sql_network_or_transition(
+    guarded_read_case, monkeypatch, profile,
+):
+    import socket
+
+    import requests
+    from sqlalchemy import text
+
+    from trade_plan_monitor.decision import buy_suspension
+    from trade_plan_monitor.runtime.daily_service import DailyRuntimeEvaluationService
+    from trade_plan_monitor.state.daily_repository import DailyRepository
+
+    case = guarded_read_case
+    selected = case.reader if profile == 2 else PersistentMonitorReadService(
+        case.chain.plans._unit_of_work, lambda: None, clock=lambda: case.chain.now,
+        readiness_service=case.reader)
+    app = create_app(read_service=selected, monitor_contract_version=profile)
+    before = _database_rows(case.engine)
+    with case.engine.connect() as connection:
+        schema = tuple(connection.execute(text("SELECT type,name,tbl_name,sql FROM sqlite_master"
+            " ORDER BY type,name")))
+    attempts = []
+
+    def denied(*args, **kwargs):
+        attempts.append(True)
+        raise AssertionError("GET attempted acquisition, transition, repair or write")
+
+    def readonly(connection, cursor, statement, parameters, context, executemany):
+        assert statement.lstrip().split()[0].upper() not in {
+            "INSERT", "UPDATE", "DELETE", "REPLACE", "CREATE", "ALTER", "DROP"}
+
+    async def scenario():
+        # Event-loop creation precedes Windows socket interception.
+        with monkeypatch.context() as patch:
+            patch.setattr(socket.socket, "connect", denied)
+            patch.setattr(socket.socket, "connect_ex", denied)
+            patch.setattr(requests.Session, "request", denied)
+            patch.setattr(requests, "post", denied)
+            patch.setattr(httpx.Client, "send", denied)
+            patch.setattr(httpx.AsyncClient, "send", denied)
+            patch.setattr(buy_suspension, "transition_buy_suspension", denied)
+            patch.setattr(case.pipeline, "advance_buy_suspension", denied)
+            patch.setattr(case.pipeline, "buy_suspension_current", denied)
+            patch.setattr(DailyRuntimeEvaluationService, "run_inputs", denied)
+            patch.setattr(DailyRepository, "save", denied)
+            patch.setattr(DailyRepository, "lock_symbol", denied)
+            event.listen(case.engine, "before_cursor_execute", readonly)
+            try:
+                bodies = []
+                for _ in range(3):
+                    response = await get(app, case.version)
+                    assert response.status_code == 200, response.text
+                    body = response.json()
+                    assert body["authorityGranted"] is False and len(body["axes"]) == 6
+                    guard = body["snapshot"]["buySuspension"]
+                    assert guard["ownerPlanVersionId"] == case.original_version
+                    if case.mode == "missing":
+                        assert guard["state"] is None and guard["stateRevision"] is None
+                        assert guard["outcome"] == "UNVERIFIED"
+                    else:
+                        assert guard["state"]["trigger"]["close_fen"] == 2419
+                    bodies.append(body)
+                assert bodies[0] == bodies[1] == bodies[2]
+            finally:
+                event.remove(case.engine, "before_cursor_execute", readonly)
+        await selected.stop()
+
+    asyncio.run(scenario())
+    assert attempts == [] and _database_rows(case.engine) == before
+    with case.engine.connect() as connection:
+        assert tuple(connection.execute(text("SELECT type,name,tbl_name,sql FROM sqlite_master"
+            " ORDER BY type,name"))) == schema
 
 
 def _incomplete_draft(state, profile, *, owner_case=None, authority=None):

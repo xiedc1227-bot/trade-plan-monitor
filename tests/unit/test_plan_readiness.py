@@ -88,6 +88,112 @@ def test_complete_current_false_is_healthy_and_never_grants_authority():
     assert result.fresh_until == NOW + timedelta(seconds=30)
 
 
+def suspension(**changes):
+    from tests.unit.test_plan_buy_suspension_state import state_payload, trigger_payload
+
+    from trade_plan_monitor.state.daily_state_models import DailyBuySuspensionState
+    from trade_plan_monitor.web.plan_readiness_models import ReadinessBuySuspension
+
+    state = DailyBuySuspensionState.model_validate(state_payload(
+        trigger=trigger_payload(), blocker=None))
+    values = dict(owner_plan_version_id=state.owner_plan_version_id, owner_hash="e" * 64,
+        birth_activation_revision=state.birth_activation_revision,
+        definition=state.definition.model_dump(), state=state, state_revision=4,
+        target=NOW.replace(second=0, microsecond=0), outcome="LATCHED",
+        maintenance=axis("DATA_EVALUATION", "PASS"), blocker="BUY_SUSPENSION_LATCHED",
+        skipped_rules=("buy-1",))
+    values.update(changes)
+    return ReadinessBuySuspension(**values)
+
+
+def test_buy_suspension_owned_skip_is_healthy_without_inventing_condition_truth():
+    skipped = rule(root_outcome=None, evaluated_at=None, evaluated_target=None,
+        observation=None, leaves=(leaf(state="UNKNOWN", reason="DEPENDENCY_UNVERIFIED"),))
+    result = assess(snapshot(rules=(skipped,), buy_suspension=suspension()))
+    assert result.summary == "READY_FOR_MONITORING"
+    assert result.rules[0].state == "BUY_SUSPENDED"
+    assert result.rules[0].facts.root_outcome is None
+    assert result.rules[0].facts.evaluated_at is None
+    assert result.rules[0].facts.leaves[0].state == "UNKNOWN"
+    assert result.snapshot.buy_suspension.state.trigger.close_fen == 2419
+    assert result.authority_granted is False and len(result.axes) == 6
+
+
+@pytest.mark.parametrize("change", [
+    {"skipped_rules": ()},
+    {"maintenance": None},
+    {"expired": True},
+    {"changed_context": True},
+])
+def test_buy_suspension_historical_latch_cannot_certify_current_health(change):
+    changes = dict(change)
+    if changes.pop("expired", False):
+        changes["maintenance"] = axis("DATA_EVALUATION", "PASS", expires_at=NOW)
+    if changes.pop("changed_context", False):
+        changes["maintenance"] = axis("DATA_EVALUATION", "PASS",
+            context=context().model_copy(update={"activation_revision": 8}))
+    if changes.get("maintenance", "absent") is None:
+        changes["maintenance"] = axis("DATA_EVALUATION", "UNKNOWN", "AUTHORITY_UNAVAILABLE")
+    guard = suspension(**changes)
+    skipped = rule(root_outcome=None, evaluated_at=None, evaluated_target=None,
+        observation=None, leaves=())
+    result = assess(snapshot(rules=(skipped,), buy_suspension=guard))
+    assert result.summary == "UNKNOWN" and result.fresh_until is None
+    assert result.snapshot.buy_suspension.state.trigger == guard.state.trigger
+    assert result.rules[0].state != "BUY_SUSPENDED"
+
+
+def test_buy_suspension_missing_record_is_unverified_and_sell_truth_remains_independent():
+    guard = suspension(state=None, state_revision=None, outcome="UNVERIFIED",
+        blocker="HISTORY_PENDING", skipped_rules=(),
+        maintenance=axis("DATA_EVALUATION", "UNKNOWN", "DEPENDENCY_UNVERIFIED"))
+    result = assess(snapshot(rules=(rule(side="SELL"),), buy_suspension=guard))
+    assert result.summary == "UNKNOWN"
+    assert result.rules[0].state == "CONDITION_FALSE"
+    assert result.snapshot.buy_suspension.state is None
+
+
+@pytest.mark.parametrize("state_present", [False, True])
+def test_buy_suspension_unverified_interval_is_unknown_even_with_healthy_maintenance(state_present):
+    from tests.unit.test_plan_buy_suspension_state import state_payload
+
+    from trade_plan_monitor.state.daily_state_models import DailyBuySuspensionState
+
+    native = DailyBuySuspensionState.model_validate(state_payload()) if state_present else None
+    guard = suspension(state=native, state_revision=4 if state_present else None,
+        outcome="UNVERIFIED", blocker="HISTORY_PENDING", skipped_rules=())
+    result = assess(snapshot(rules=(rule(side="SELL"),), buy_suspension=guard))
+    assert result.summary == "UNKNOWN" and result.fresh_until is None
+    assert result.rules[0].state == "CONDITION_FALSE"
+
+
+@pytest.mark.parametrize("changes", [
+    {"owner_hash": None}, {"target": None},
+])
+def test_buy_suspension_missing_owner_or_target_cannot_be_a_maintained_skip(changes):
+    skipped = rule(root_outcome=None, evaluated_at=None, evaluated_target=None,
+        observation=None, leaves=())
+    result = assess(snapshot(rules=(skipped,), buy_suspension=suspension(**changes)))
+    assert result.summary == "UNKNOWN" and result.rules[0].state != "BUY_SUSPENDED"
+
+
+def test_buy_suspension_legacy_json_omits_absent_extension_and_native_roundtrips():
+    original = snapshot()
+    assert "buySuspension" not in original.model_dump(mode="json", by_alias=True)
+    guarded = snapshot(buy_suspension=suspension())
+    assert type(guarded).model_validate_json(guarded.model_dump_json()) == guarded
+    assert "buy_suspension" not in assess(original).snapshot.model_dump()
+
+
+@pytest.mark.parametrize("changes", [
+    {"state_revision": None}, {"owner_plan_version_id": "foreign"},
+    {"birth_activation_revision": 99}, {"outcome": "CLEAR_THROUGH_TARGET"},
+])
+def test_buy_suspension_rejects_mixed_native_owner_and_state(changes):
+    with pytest.raises(ValidationError):
+        suspension(**changes)
+
+
 def test_all_false_cannot_hide_a_missing_leaf():
     result = assess(snapshot(rules=(rule(leaves=(
         leaf("condition.conditions[0]"),

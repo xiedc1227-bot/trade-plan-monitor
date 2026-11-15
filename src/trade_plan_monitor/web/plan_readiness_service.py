@@ -25,7 +25,10 @@ from trade_plan_monitor.domain.plan_codec import PlanDocumentError, load_plan_js
 from trade_plan_monitor.domain.plan_models import activation_is_eligible_on
 from trade_plan_monitor.domain.risk_scope import blocks_new_entry, risk_identity
 from trade_plan_monitor.domain.unified_plan_models import UnifiedTradePlan, condition_leaves
-from trade_plan_monitor.domain.unified_plan_validation import UnifiedPlanDraft
+from trade_plan_monitor.domain.unified_plan_validation import (
+    BuySuspensionPlanDraft,
+    UnifiedPlanDraft,
+)
 from trade_plan_monitor.market_data.daily_data import DailyExecutionQuote
 from trade_plan_monitor.runtime.status_authority import (
     ConditionInputStamp,
@@ -36,9 +39,10 @@ from trade_plan_monitor.runtime.status_authority import (
     condition_status_target,
 )
 from trade_plan_monitor.state.daily_accounting import DailyAccounting
-from trade_plan_monitor.state.daily_repository import DailyRepository
+from trade_plan_monitor.state.daily_repository import DailyRepository, buy_suspension_record_id
 from trade_plan_monitor.state.daily_state_models import (
     DailyEvaluationState,
+    DailyReviewBinding,
     DailyRiskState,
     DailySignalState,
 )
@@ -61,6 +65,7 @@ from trade_plan_monitor.web.plan_readiness_models import (
     ConditionReadiness,
     ExpectedConfirmation,
     InventoryRequirements,
+    ReadinessBuySuspension,
     ReadinessContext,
     ReadinessDeliveryAttempt,
     ReadinessExecutionState,
@@ -76,6 +81,7 @@ from trade_plan_monitor.web.plan_readiness_models import (
 )
 from trade_plan_monitor.web.plan_readiness_summary import (
     inventory_requirements,
+    maintained_buy_skip,
     summarize_readiness,
 )
 from trade_plan_monitor.web.source_coverage_read import read_source_coverage
@@ -538,9 +544,137 @@ def _exception_sources(work, reads, signals, now):
     return current, tuple(bindings)
 
 
+def _suspension_inputs(work, details, plan, now):
+    """Read exact original ownership and compact stored proof; never initialize a guard."""
+    from trade_plan_monitor.runtime.recovery import buy_suspension_target
+    from trade_plan_monitor.state.activation_history import (
+        guard_owner_hash,
+        resolve_buy_suspension_context,
+        suspension_plan,
+    )
+
+    reads = ActionOwnerReader(work)
+    review_row = reads.daily("review-" + details.id)
+    receipt = (None if review_row is None else
+        DailyReviewBinding.model_validate(review_row["payload"]).buy_suspension_replacement)
+    if plan.schema_version != 10 and receipt is None:
+        return None
+    definition = getattr(plan, "buy_suspension", None)
+    context, owner, owner_hash, row, error = None, None, None, None, None
+    try:
+        context = resolve_buy_suspension_context(work.plans, plan.symbol)
+        # A saved candidate cannot borrow an active sibling's state or authority.
+        related = (context.predecessor is not None and context.predecessor.id == details.id
+                   or context.owner is not None and context.owner.id == details.id)
+        if related and context.owner is not None:
+            owner = context.owner
+            actual = suspension_plan(owner).buy_suspension
+            if definition != actual:
+                raise ValueError("requested guard differs from its original owner")
+            owner_hash = guard_owner_hash(context)
+            # Reject pending edits/deletes/renames before the refreshing repository read.
+            reads.daily(buy_suspension_record_id(plan.symbol, owner.id))
+            row = work.daily.get_buy_suspension(symbol=plan.symbol, owner_plan_version_id=owner.id)
+            if row is not None:
+                state = row["state"]
+                if (state.symbol, state.content_hash, state.source_hash, state.review_id,
+                    state.birth_activation_revision, state.definition) != (
+                        plan.symbol, owner.content_hash, owner.source_hash, owner.review_id,
+                        context.birth_revision, actual):
+                    row = None
+                    raise ValueError("guard record differs from its original owner")
+    except ValueError:
+        error = "OWNER_CONTEXT_UNVERIFIED"
+    days = MarketReferenceRepository(work.daily.session).list_trading_days(
+        plan.market, now.date(), now.date())
+    if days and (not days[0].is_open or now.time() < time(9, 30)):
+        days += MarketReferenceRepository(work.daily.session).list_trading_days(
+            plan.market, days[0].previous_trade_date, days[0].previous_trade_date)
+    target = buy_suspension_target(now, days)
+    strategy_start = (receipt.intent.strategy_effective_from if receipt is not None else
+                      None if context is None else context.strategy_effective_from)
+    if (definition is None and error is None and context is not None
+            and context.owner is None and receipt is None and strategy_start is None):
+        return None
+    binding = (error, None if context is None else context.activation_revision,
+        None if context is None or context.predecessor is None else (
+            context.predecessor.id, context.predecessor.plan_hash,
+            context.predecessor.content_hash, context.predecessor.source_hash,
+            context.predecessor.review_id, context.predecessor.review_revision),
+        None if owner is None else owner.id, owner_hash,
+        None if context is None else context.birth_revision, strategy_start, target,
+        tuple(day.model_dump_json() for day in days),
+        None if review_row is None else (review_row["revision"], canonical(review_row["payload"])),
+        None if row is None else (row["id"], row["revision"], row["state_hash"]))
+    return SimpleNamespace(context=context, owner=owner, owner_hash=owner_hash, row=row,
+        definition=definition, target=target, strategy_start=strategy_start, receipt=receipt,
+        error=error, binding=binding)
+
+
+def _suspension_facts(value, now, *, observe, expiry):
+    inputs = value.suspension
+    if inputs is None:
+        return None
+    state = None if inputs.row is None else inputs.row["state"]
+    revision = None if inputs.row is None else inputs.row["revision"]
+    owner_id = None if inputs.owner is None else inputs.owner.id
+    native = value.native
+    outcome = ("LATCHED" if state is not None and state.trigger is not None else
+               "UNVERIFIED" if inputs.definition is not None else None)
+    started = inputs.strategy_start is None or now >= inputs.strategy_start
+    retired = (inputs.definition is None and inputs.context is not None
+               and inputs.context.owner is None and inputs.strategy_start is not None)
+    bound = bool(value.current and inputs.error is None and inputs.context is not None
+        and inputs.context.predecessor is not None
+        and inputs.context.predecessor.id == value.details.id
+        and inputs.context.activation_revision == value.activation_revision
+        and native.buy_suspension_owner_plan_version_id == owner_id
+        and native.buy_suspension_revision == revision
+        and (native.buy_suspension_target == inputs.target and inputs.target is not None
+             or retired and started and native.buy_suspension_target is None)
+        and (state is not None and state.evaluated_at <= native.evaluated_at
+             or retired))
+    blocker = inputs.error or (
+        "BUY_SUSPENSION_LATCHED" if outcome == "LATCHED" else
+        "STRATEGY_START_NOT_REACHED" if not started else
+        "CALENDAR_UNVERIFIED" if inputs.target is None else
+        "HISTORY_PENDING" if state is None and inputs.definition is not None else
+        None if state is None else state.blocker)
+    expected = tuple(identity for kind, identity, side, _ in value.owners
+                     if kind == "ORDINARY_RULE" and side == "BUY")
+    suppressed = bool(bound and tuple(native.buy_suspension_skipped_rules or ()) == expected
+        and native.buy_suspension_blocker == (
+            "BUY_SUSPENSION_LATCHED" if outcome == "LATCHED" else "BUY_SUSPENSION_UNVERIFIED"))
+    clear = bool(bound and state is not None and state.outcome == "CLEAR_THROUGH_TARGET"
+                 and state.target == inputs.target and native.buy_suspension_blocker is None
+                 and not native.buy_suspension_skipped_rules and started)
+    current = bool(bound and (clear or outcome == "LATCHED" and suppressed
+                    or retired and (started and native.buy_suspension_blocker is None
+                                    or not started and suppressed)))
+    if clear:
+        outcome = "CLEAR_THROUGH_TARGET"
+    if not current and blocker is None:
+        blocker = "DEPENDENCY_UNVERIFIED"
+    ref = ("guard:" + owner_id if inputs.row is None and owner_id is not None else
+           "plan:" + value.details.id if inputs.row is None else inputs.row["id"])
+    maintenance = AxisReadiness(axis="DATA_EVALUATION",
+        state="PASS" if current else "UNKNOWN",
+        reason=None if current else "DEPENDENCY_UNVERIFIED",
+        observation=observe(ref, availability="CURRENT" if current else "PERSISTED_ONLY",
+            as_of=None if state is None else state.evaluated_at,
+            expires=expiry if current else None))
+    return ReadinessBuySuspension(owner_plan_version_id=owner_id, owner_hash=inputs.owner_hash,
+        birth_activation_revision=None if inputs.owner is None else inputs.context.birth_revision,
+        definition=None if inputs.definition is None else inputs.definition.model_dump(),
+        state=state, state_revision=revision, target=inputs.target, outcome=outcome,
+        maintenance=maintenance, blocker=blocker,
+        skipped_rules=expected if current and suppressed else (),
+        strategy_effective_from=inputs.strategy_start, replacement=inputs.receipt)
+
+
 def _load(session, authority, version_id, now):
     work = SimpleNamespace(
-        daily=DailyRepository(session, clock=lambda: now, id_factory=_no_write_identity),
+        daily=DailyRepository(session, clock=lambda: now, id_factory=None),
         plans=PlanRepository(session, clock=lambda: now, id_factory=_no_write_identity,
                              events=MonitorEventLog(session, clock=lambda: now)),
     )
@@ -560,7 +694,8 @@ def _load(session, authority, version_id, now):
                 or source.summary.current_review_bound):
             raise
         draft = load_daily_draft_json(details.payload_json)
-        if type(draft) is not UnifiedPlanDraft or draft.to_executable() is not None:
+        if type(draft) not in {UnifiedPlanDraft, BuySuspensionPlanDraft} or (
+                draft.to_executable() is not None):
             raise
         owners = _owners(draft)
         if (not owners or any(identity is None for _, identity, _, _ in owners)
@@ -571,13 +706,16 @@ def _load(session, authority, version_id, now):
         if (active is not None and active.plan_version_id == version_id
                 or activation is not None and activation.plan_version_id == version_id):
             raise
-        return SimpleNamespace(source=source, details=details, plan=draft,
+        suspension = _suspension_inputs(work, details, draft, now)
+        return SimpleNamespace(source=source, details=details, plan=draft, suspension=suspension,
             owners=owners, binding=(source.summary.model_dump_json(),
                 details.payload_json, details.revision, details.status, details.review_id,
-                details.review_revision, details.review_confirmed_at, active, activation))
+                details.review_revision, details.review_confirmed_at, active, activation,
+                None if suspension is None else suspension.binding))
     if not isinstance(plan, UnifiedTradePlan):
         raise ValueError("Readiness requires a supported native saved plan")
     owners = _owners(plan)
+    suspension = _suspension_inputs(work, details, plan, now)
     requirements = tuple(inventory_requirements(plan, owner_kind=kind, owner_id=identity)
                          for kind, identity, _, _ in owners)
     reads = ActionOwnerReader(work)
@@ -679,9 +817,11 @@ def _load(session, authority, version_id, now):
         tuple((identity, None if origin is None else origin.binding)
               for identity, origin in risk_origins.items()),
         tuple((identity, None if row is None else (row["revision"], canonical(row["payload"])))
-              for identity, row in risks.items()))
+              for identity, row in risks.items()),
+        None if suspension is None else suspension.binding)
     value = SimpleNamespace(source=source, details=details, plan=plan, owners=owners,
         requirements=requirements, active=bound_active, inventory=inventory, book=book,
+        suspension=suspension,
         capital_inputs=capital_inputs,
         signals=signals,
         calendar_open=calendar_open,
@@ -761,7 +901,7 @@ def _alert_notification_fulfilled(value, rule, alert):
 
 
 def _notification_service_axis(value, authority, result, now, *, observe, expiry):
-    """Prove only exact alert fulfillment or native Schema5 empty-signal FALSE."""
+    """Prove exact alert fulfillment or native ordinary empty-action FALSE/guard skips."""
     from trade_plan_monitor.runtime.daily_service import _alert_only
 
     service = None if authority is None else authority.notification_service
@@ -797,9 +937,12 @@ def _notification_service_axis(value, authority, result, now, *, observe, expiry
             if (alert.outcome != "SATISFIED" or rule.state != "CONDITION_TRUE"
                     or not _alert_notification_fulfilled(value, rule, alert)):
                 return None
-    elif (value.plan.schema_version != 5 or not value.plan.ordinary_rules
+    elif (value.plan.schema_version not in {5, 10} or not value.plan.ordinary_rules
             or value.plan.risk_branches
-            or any(rule.state != "CONDITION_FALSE" for rule in result.rules)
+            or any(rule.state != "CONDITION_FALSE" and not (
+                rule.state == "BUY_SUSPENDED" and maintained_buy_skip(
+                    rule.facts, result.snapshot, owner_current=value.owner_current))
+                for rule in result.rules)
             or any(alert.outcome != "UNSATISFIED" for alert in native.alerts)):
         return None
     bound = _bounded_until(now, (expiry, service.valid_until, service.progress_due_at))
@@ -940,7 +1083,13 @@ def _incomplete_readiness(value, now):
     trade = any(rule.owner_kind != "ALERT_RULE" for rule in rules)
     result = summarize_readiness(ReadinessSnapshot(computed_at=now, context=context,
         scope="MIXED" if alert and trade else "ALERT_ONLY" if alert else "TRADE_RULES",
-        axes=axes, rules=rules))
+        axes=axes, rules=rules, buy_suspension=(None if value.suspension is None else
+            ReadinessBuySuspension(owner_plan_version_id=None, owner_hash=None,
+                birth_activation_revision=None, definition=value.suspension.definition,
+                state=None, state_revision=None, target=value.suspension.target,
+                outcome="UNVERIFIED", blocker="SOURCE_REVIEW_REQUIRED",
+                maintenance=AxisReadiness(axis="DATA_EVALUATION", state="UNKNOWN",
+                    reason="SOURCE_REVIEW_REQUIRED")))))
     if len(result.model_dump_json(by_alias=True).encode("utf-8")) > MAX_READINESS_BYTES:
         raise ValueError("Readiness exceeds the complete 1MiB view bound")
     return result, value.binding
@@ -952,7 +1101,7 @@ def read_plan_readiness(session, authority, version_id, now):
         value = _load(session, authority, version_id, now)
         if value is None:
             return None, None
-        if type(value.plan) is UnifiedPlanDraft:
+        if type(value.plan) in {UnifiedPlanDraft, BuySuspensionPlanDraft}:
             return _incomplete_readiness(value, now)
         summary = value.source.summary
         context = ReadinessContext(plan_version_id=UUID(version_id),
@@ -1026,6 +1175,7 @@ def read_plan_readiness(session, authority, version_id, now):
         axes.append(AxisReadiness(axis="NOTIFICATION_DELIVERY", state="UNKNOWN",
                                   reason="DELIVERY_UNVERIFIED"))
         rules = []
+        guard = _suspension_facts(value, now, observe=observation, expiry=expiry)
         for (kind, identity, side, rule), requirements, inputs_ready in zip(
                 value.owners, value.requirements, money_ready, strict=True):
             evidence, root = None, None
@@ -1218,6 +1368,9 @@ def read_plan_readiness(session, authority, version_id, now):
                 rule_observation = observation("risk:" + row["id"], availability="CACHED")
             execution = _execution(value, kind, identity, side, rule, now,
                 inputs_ready=inputs_ready, observe=observation, context_expiry=context_expiry)
+            if guard is not None and side == "BUY" and guard.blocker is not None:
+                execution = execution.model_copy(update={"eligible": False,
+                    "reason": guard.blocker})
             capital, economics = _money_results(value, kind, rule, requirements, execution, now)
             money_current = not requirements.quote or (
                 _rule_sources_current(value, kind, rule, now)
@@ -1244,10 +1397,18 @@ def read_plan_readiness(session, authority, version_id, now):
                 root_outcome=root, leaves=leaves, expected_confirmation=expected_confirmation,
                 execution=execution, money=money, risk=risk,
                 notification=_notification(value, authority, kind, identity, observe=observation)))
+        # Use the same pure suppression check as the final summary. No completed
+        # BUY root or comparison time is synthesized for an intentional skip.
+        alert = any(kind == "ALERT_RULE" for kind, *_ in value.owners)
+        trade = any(kind != "ALERT_RULE" for kind, *_ in value.owners)
+        scope = "MIXED" if alert and trade else "ALERT_ONLY" if alert else "TRADE_RULES"
+        guard_snapshot = ReadinessSnapshot(computed_at=now, context=context, scope=scope,
+            axes=tuple(axes), rules=tuple(rules), buy_suspension=guard)
         if value.current and any(
                 rule.risk.maintenance.state != "PASS" if rule.risk is not None else
-                rule.root_outcome is None or rule.observation is None
-                or rule.observation.availability != "CURRENT" for rule in rules):
+                not maintained_buy_skip(rule, guard_snapshot, owner_current=owner_ok) and (
+                    rule.root_outcome is None or rule.observation is None
+                    or rule.observation.availability != "CURRENT") for rule in rules):
             axes = [AxisReadiness(axis="DATA_EVALUATION", state="UNKNOWN",
                     reason="DEPENDENCY_UNVERIFIED", observation=data_observation)
                     if axis.axis == "DATA_EVALUATION" else axis for axis in axes]
@@ -1264,11 +1425,9 @@ def read_plan_readiness(session, authority, version_id, now):
                     observation=observation(
                         evaluation_ref, expires=context_expiry, as_of=evaluated_at))
                 if axis.axis == "DATA_EVALUATION" else axis for axis in axes]
-        alert = any(kind == "ALERT_RULE" for kind, *_ in value.owners)
-        trade = any(kind != "ALERT_RULE" for kind, *_ in value.owners)
         result = summarize_readiness(ReadinessSnapshot(computed_at=now, context=context,
-            scope="MIXED" if alert and trade else "ALERT_ONLY" if alert else "TRADE_RULES",
-            axes=tuple(axes), rules=tuple(rules)))
+            scope=scope,
+            axes=tuple(axes), rules=tuple(rules), buy_suspension=guard))
         notification_service = _notification_service_axis(
             value, authority, result, now, observe=observation, expiry=expiry)
         if notification_service is not None:
@@ -1302,7 +1461,14 @@ def changed_readiness(result):
         "leaves": tuple(leaf.model_copy(update={"state": "UNKNOWN", "reason": "CONTEXT_CHANGED",
                                               "evidence_refs": ()}) for leaf in rule.leaves)})
         for rule in result.snapshot.rules)
-    changed = summarize_readiness(result.snapshot.model_copy(update={"axes": axes, "rules": rules}))
+    guard = result.snapshot.buy_suspension
+    if guard is not None:
+        guard = guard.model_copy(update={"maintenance": AxisReadiness(axis="DATA_EVALUATION",
+            state="UNKNOWN", reason="CONTEXT_CHANGED"), "skipped_rules": (),
+            "outcome": "UNVERIFIED" if guard.outcome == "CLEAR_THROUGH_TARGET" else guard.outcome,
+            "blocker": "CONTEXT_CHANGED"})
+    changed = summarize_readiness(result.snapshot.model_copy(update={
+        "axes": axes, "rules": rules, "buy_suspension": guard}))
     if len(changed.model_dump_json(by_alias=True).encode("utf-8")) > MAX_READINESS_BYTES:
         raise ValueError("Readiness exceeds the complete 1MiB view bound")
     return changed

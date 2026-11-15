@@ -17,11 +17,13 @@ from trade_plan_monitor.decision.p3_capital import CapitalAssessment
 from trade_plan_monitor.domain.daily_hash import canonical
 from trade_plan_monitor.domain.daily_plan_models import RiskKind
 from trade_plan_monitor.domain.unified_plan_models import condition_leaves
+from trade_plan_monitor.domain.unified_plan_validation import BuySuspensionDraftDefinition
 from trade_plan_monitor.market_data.models import ShanghaiDatetime
 from trade_plan_monitor.notifications.channels import ChannelErrorCode, DeliveryChannel
 from trade_plan_monitor.notifications.dispatcher import DeliveryAttemptStatus
 from trade_plan_monitor.notifications.recovery_eligibility import RecoveryDeliveryStatus
-from trade_plan_monitor.state.daily_state_models import DailyRiskEvaluation
+from trade_plan_monitor.state.daily_state_models import DailyBuySuspensionState, DailyRiskEvaluation
+from trade_plan_monitor.state.source_coverage_values import BuySuspensionReplacementBinding
 from trade_plan_monitor.web.schemas import ApiValue
 
 Reference = Annotated[str, Field(min_length=1, max_length=256)]
@@ -35,6 +37,7 @@ AxisState = Literal["PASS", "WAIT", "BLOCKED", "UNKNOWN", "NOT_APPLICABLE"]
 RuleState = Literal[
     "CONDITION_TRUE", "CONDITION_FALSE", "WAITING_OFFICIAL_CONFIRMATION",
     "AWAITING_FIRST_EVALUATION", "MISSING_INPUT", "BLOCKED", "UNKNOWN",
+    "BUY_SUSPENDED",
 ]
 ReadinessReason = Literal[
     "SOURCE_REVIEW_REQUIRED", "SAFETY_BLOCKED", "CONFIGURATION_BLOCKED",
@@ -43,6 +46,7 @@ ReadinessReason = Literal[
     "AUTHORITY_UNAVAILABLE", "CONTEXT_CHANGED", "TARGET_MISMATCH",
     "EVIDENCE_EXPIRED", "DELIVERY_UNVERIFIED", "UPGRADE_REQUIRED",
     "DEPENDENCY_UNVERIFIED",
+    "BUY_SUSPENSION_LATCHED", "STRATEGY_START_NOT_REACHED",
 ]
 SummaryState = Literal[
     "READY_FOR_MONITORING", "WAITING_EXPECTED_CONFIRMATION", "WAITING_REQUIRED_SERVICE",
@@ -474,12 +478,65 @@ class RuleReadinessFacts(ApiValue):
         return self
 
 
+class ReadinessBuySuspension(ApiValue):
+    """Original native guard evidence, separate from monitoring health or trade authority."""
+
+    owner_plan_version_id: Reference | None
+    owner_hash: Digest | None
+    birth_activation_revision: Revision | None
+    definition: BuySuspensionDraftDefinition | None
+    state: DailyBuySuspensionState | None
+    state_revision: Annotated[int, Field(gt=0, le=2**53 - 1)] | None
+    target: ShanghaiDatetime | None
+    outcome: Literal["UNVERIFIED", "CLEAR_THROUGH_TARGET", "LATCHED"] | None
+    maintenance: AxisReadiness
+    blocker: Reference | None
+    skipped_rules: tuple[Reference, ...] = Field(default=(), max_length=2)
+    strategy_effective_from: ShanghaiDatetime | None = None
+    replacement: BuySuspensionReplacementBinding | None = None
+
+    @field_validator("definition", "state", "replacement", mode="before")
+    @classmethod
+    def native_facts(cls, value, info: ValidationInfo):
+        if value is None or info.mode != "json":
+            return value
+        model = {"definition": BuySuspensionDraftDefinition, "state": DailyBuySuspensionState,
+                 "replacement": BuySuspensionReplacementBinding}[info.field_name]
+        return model.model_validate_json(canonical(value))
+
+    @model_validator(mode="after")
+    def original_owner(self) -> Self:
+        if self.maintenance.axis != "DATA_EVALUATION":
+            raise ValueError("guard maintenance uses the existing data axis")
+        if (self.state is None) != (self.state_revision is None):
+            raise ValueError("native state and positive repository revision are paired")
+        if self.state is not None:
+            state = self.state
+            if (state.owner_plan_version_id != self.owner_plan_version_id
+                    or state.birth_activation_revision != self.birth_activation_revision
+                    or self.definition is None
+                    or state.definition.model_dump() != self.definition.model_dump()):
+                raise ValueError("guard evidence differs from the original owner")
+            if (state.trigger is not None and self.outcome != "LATCHED"
+                    or self.outcome == "LATCHED" and state.trigger is None
+                    or self.outcome == "CLEAR_THROUGH_TARGET"
+                    and state.outcome != "CLEAR_THROUGH_TARGET"):
+                raise ValueError("projection cannot rewrite native trigger evidence")
+        elif self.outcome not in {None, "UNVERIFIED"}:
+            raise ValueError("absent state cannot certify a clear or latched interval")
+        if len(set(self.skipped_rules)) != len(self.skipped_rules):
+            raise ValueError("suppressed rule identities must be unique")
+        return self
+
+
 class ReadinessSnapshot(ApiValue):
     computed_at: ShanghaiDatetime
     context: ReadinessContext
     scope: Literal["ALERT_ONLY", "TRADE_RULES", "MIXED"]
     axes: tuple[AxisReadiness, ...] = Field(min_length=6, max_length=6)
     rules: tuple[RuleReadinessFacts, ...] = Field(min_length=1, max_length=76)
+    buy_suspension: ReadinessBuySuspension | None = Field(
+        default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def complete_scope(self) -> Self:
