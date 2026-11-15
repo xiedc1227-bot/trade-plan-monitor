@@ -148,6 +148,26 @@ class PositionLot(BaseModel):
 - 连续盘中临时日线聚合与 15:00 临时收盘共享现有 `(symbol, trade_date, is_official=False)` identity，并且仅在 `received_at` 更新时推进；官方行保留独立的 `is_official=True` identity。不得新增压力状态表。T023 在纯编排期间从 `current_day_minutes` 临时推导 `pressure_touch_at`。
 - T018 暴露这些 Session 绑定仓储用于确定性持久化测试。应用 `UnitOfWork` 接线延后到负责原子运行时事务流的 T032；任何调用方都不得在数据库事务内执行 Tushare 请求。
 
+## 计划 BUY 禁买状态（PBS-T05）
+
+`DailyBuySuspensionState` 使用版本 `buy-suspension-state-v1`，是 `kind="BUY_SUSPENSION"` 的私有 `DailyRecord` 载荷。增量迁移 `0030_buy_suspension` 接续 `0029_native_fact_lookup`，仅扩展 `ck_daily_record_kind`。其事务性表复制保留全部旧载荷字节及每个既有索引定义，包括表达式／部分索引。存在任何 BUY 禁买记录时，降级在 DDL 前拒绝；否则空表或仅含旧 kind 的表可以安全恢复前一约束。PBS-T05 在全新和前一版本的隔离 SQLite 数据库中验证真实 `upgrade_database()` 路径。不修改历史迁移，也不打开或升级用户数据库。Schema10 启用仍保持关闭，等待后续运行／接替集成。
+
+记录保留原始 `owner_plan_version_id`、`symbol`、`content_hash`、`source_hash`、`review_id`、`birth_activation_revision` 和完整 `BuySuspensionDefinition`。确定性记录 ID 与 `lineage` 绑定原始 owner；重新启用或普通续版不能通过创建替代 owner 重置状态。`DailyRepository.get_buy_suspension(symbol=..., owner_plan_version_id=...)` 无写入地读取真实私有记录、类型化 `state`、外层 `revision` 与计算所得 `state_hash`。此查询不解析前序关系，也不授予启用权限。T08 负责服务端前序解析；缺少状态时必须阻断凭据，不能用虚构成功快照替代。
+
+`transition_buy_suspension` 是时序工程回放使用、并供后续运行集成复用的唯一纯转移函数。每个 `BuySuspensionBatch` 最多跨一个日历日期，可以结束于次日零点，并且最多包含 240 个真实分钟身份。确切的交易所日历证据允许闭市日和空区间推进。只有起始不早于 `effective_from`、结束不晚于 `target`、且在 `evaluated_at` 前可取得的完整五分钟 K 线才能触发。收盘必须严格低于 `price_fen`；仅最低价、未完整 K 线或未来数据均不能替代。即使更早存在缺口，有效的已观察跌破也可以锁存，但不能声称它是历史首次跌破。
+
+`BuySuspensionPriceBasis` 是私有适配输入，不是提供方真值证明。适配方必须确认 `TUSHARE_STK_MINS_241_END_V1` 下真实未复权 `stk_mins` 来源语义，并取得实际交易日因子和实际当前锚点因子。可比因子必须相等，但不要求等于 1。仅有字符串基准 ID 不足以证明。实际锚点日期推进但实际因子不变时仍可比；因子改变则撤销旧前缀。不静默重算阈值。日历证明的空区间无需虚构价格因子。
+
+状态只保留紧凑的覆盖哈希链、已核查进度、当前锚点和进程 generation，不保存全部历史 K 线。`PROOF_INVALIDATED` 和 `GENERATION_CHANGED` 清除覆盖，并从原明确起点暴露未核实区间。后续批次缺失时可以保留真实已核实的部分前缀。`BATCH_BUDGET_EXHAUSTED` 暂停但不丢弃该前缀，让有限、稳定且可取得的区间通过后续有界调用完成。未核实状态不能同时声称完整有效覆盖。一旦记录触发证据，即使回升、更正或重启，也不能在原记录中清除或替换。
+
+保存参与方必须在同一事务内，先取得 `DailyRepository.lock_symbol`，再读取、比较和保存，并提供确切的外层 `expected_revision`；复用审计和修订冲突行为。顺序修订测试不代表并发验收。T06 仍负责真实已提交行／日历／基准绑定、实际数据写入路径上的事务性失效、重启 generation 处理与有界获取。T07 仍负责实际 BUY 和排队通知边界的当前目标／修订屏障。T08 负责普通继承与确切已审核接替启用。仅存储哈希、回放结果或私有读取方法均不能授予 BUY 权限。现有 SIGNAL/RISK 载荷语义、Schema5–9、v12 和公共冻结契约保持不变。
+
+隔离定向验证：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/unit/test_plan_buy_suspension_state.py tests/unit/test_plan_buy_suspension_transition.py tests/unit/test_plan_buy_suspension_chronological_replay.py tests/integration/test_plan_buy_suspension_storage.py -m "not live" -q
+```
+
 ## 代码风格
 
 ```python
