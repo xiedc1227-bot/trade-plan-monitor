@@ -6,7 +6,7 @@ from hashlib import sha256
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from trade_plan_monitor.ai.extraction import (
     _diagnostic,
@@ -76,6 +76,15 @@ class PlanUpdateContext(ResearchValue):
     )
     available_at: LoopTimestamp
     evidence: tuple[PriorPlanEvidence, ...] = Field(default=(), max_length=2000)
+
+    @field_validator("snapshot", mode="before")
+    @classmethod
+    def reject_buy_suspension_snapshot(cls, value):
+        schema = (value.get("schema_version") if isinstance(value, dict)
+                  else getattr(value, "schema_version", None))
+        if schema == 10:
+            raise ValueError("BUY_SUSPENSION_UPDATE_UNSUPPORTED")
+        return value
 
 
 class PlanUpdateOperation(ResearchValue):

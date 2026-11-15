@@ -388,6 +388,8 @@ class OfflineBacktestRunner:
     ) -> BacktestRunReport | UnifiedReplayReport | BacktestCancellationResult:
         """Run a finite offline replay; no provider, scheduler, or notification is reachable."""
 
+        if isinstance(plan, UnifiedTradePlan) and plan.schema_version == 10:
+            raise BacktestBlockedError("BUY_SUSPENSION_FROZEN_UNSUPPORTED")
         if not isinstance(plan, UnifiedTradePlan):
             if research_input is not None:
                 raise ValueError("RESEARCH_INPUT_FORBIDDEN")
