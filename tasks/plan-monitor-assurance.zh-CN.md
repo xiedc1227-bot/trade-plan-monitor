@@ -284,6 +284,14 @@ R120（`3ead355`）验收三文件锁/进度修复及指定维护入口适配：
 - 文件／范围：有据失败按根因拆最多5文件修复，更新双语验收报告。
 - 验收：A12；验证：V06、V07。对账原始失败／准确复验、排除及重叠计数，容量单跑；不改旧黄金、不削弱断言、不加skip、不提高门槛来通过。
 
+#### PMA-T22-FP01 — 2026-11-16已批准准备范围及下一依赖
+
+PBS-FP-D01范围已于2026-11-16、Asia/Shanghai获批；实施／验收仍待完成。新的版本化不可变Schema10准备／投影及true03→04组合边界见[PBS第6.2节／PBS-FP01–PBS-FP08](../docs/specifications/monitoring/SPEC-plan-buy-suspension.zh-CN.md#62-pbs-fp-d01--后续最小冻结准备增补)及[PMA-S09](../docs/specifications/monitoring/SPEC-plan-monitor-assurance.zh-CN.md#pma-s09--后续最小schema10冻结准备增补)。旧冻结拒绝及公共数据集／运行／执行回放／用户状态排除保留。
+
+已审计的[前序证据](../data/verification/2026-10-17-predecessor-continuity/predecessor-evidence.json)、上下文[02文件](../data/verification/2026-10-17-predecessor-continuity/02-20260928-092555.txt)（早期摘录追加于第43行，并非未修改的原始夹具内容）及[用户确认](../data/verification/2026-10-17-predecessor-continuity/user-confirmation.json)恢复了历史含义。通过 `SourceBoundField.supplement` 保留2026-10-17的 `HUMAN_SUPPLEMENT` 人答 `user-suspension-20261017` / `RESUME_FIRST_CLOSE`；空 `clause_ids` 不能变成编造的 `PriorPlanEvidence` 摘录。按归属证据复用既有 `LineagePlacement`。实际当前绑定／审核回执／manifest／稳定首个100股／风险规则ID仍未绑定，不授予权限；这是工程缺口，不是新的用户澄清。
+
+下一步先用既有current-plan/source机制隔离验证，或独立纯模型映射测试，明确原文／补充／当前审核／前序关系证明布局及完整载荷可行性；再冻结确切类型化传输／编解码／哈希契约。冻结后私有合成单元可先于实际原文集成。新格式03审核／冻结／重读是实际04组合的前置，不是初始格式代码的前置。本处不放行传输名称或代码。N03仍因Windows proactor/socketpair环境阻断，没有业务RED/GREEN证据。F083及原文／语料／供应商／整体门禁保留各自证据要求；不改勾选或历史记录。
+
 
 ### PMA-T23 — 更新双语操作与能力文档
 

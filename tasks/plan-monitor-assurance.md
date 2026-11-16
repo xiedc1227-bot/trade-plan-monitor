@@ -284,6 +284,14 @@ R120 (`3ead355`) accepts the three-file lock/progress fix and named maintenance 
 - Files/scope: justified failures split by root cause into at most5-file repairs, paired verification-report updates.
 - Acceptance: A12; Verify: V06,V07. Reconcile initial failures/exact reruns, exclusions and overlapping counts; run capacity alone. Do not change old goldens, weaken assertions, add skips or increase resource thresholds to pass.
 
+#### PMA-T22-FP01 — 2026-11-16 approved preparation scope and next dependency
+
+PBS-FP-D01 scope was approved on 2026-11-16, Asia/Shanghai; implementation/acceptance remains pending. The new versioned immutable Schema10 preparation/projection and true03→04 composition boundary is defined in [PBS section 6.2 / PBS-FP01–PBS-FP08](../docs/specifications/monitoring/SPEC-plan-buy-suspension.md#62-pbs-fp-d01--later-minimum-frozen-preparation-delta) and [PMA-S09](../docs/specifications/monitoring/SPEC-plan-monitor-assurance.md#pma-s09--later-minimum-schema10-frozen-preparation-delta). Old frozen rejection and public dataset/run/execution replay/user-state exclusions remain.
+
+The audited [predecessor evidence](../data/verification/2026-10-17-predecessor-continuity/predecessor-evidence.json), context-bearing [02 file](../data/verification/2026-10-17-predecessor-continuity/02-20260928-092555.txt) (earlier quote appended at line43, not part of the unchanged original fixture) and [user confirmation](../data/verification/2026-10-17-predecessor-continuity/user-confirmation.json) recover historical meaning. Preserve the 2026-10-17 `HUMAN_SUPPLEMENT` answer `user-suspension-20261017` / `RESUME_FIRST_CLOSE` through `SourceBoundField.supplement`; empty `clause_ids` cannot become a fabricated `PriorPlanEvidence` excerpt. Reuse existing `LineagePlacement` per owner evidence. Actual current bindings/review receipt/manifest/stable first-100/risk rule IDs remain unbound, without authority; this is an engineering gap, not a new user clarification.
+
+Next establish source/supplement/current-review/lineage proof layout and whole-payload feasibility through existing current-plan/source mechanisms in isolation or independent pure-model mapping tests; then freeze the exact typed wire/codec/hash contract. Private synthetic units may precede actual-source integration after that freeze. New-format 03 review/freeze/reread precedes actual 04 composition, not initial format code. No wire name or code is released here. N03 remains Windows proactor/socketpair environment-blocked without business RED/GREEN evidence. F083 and source/corpus/provider/overall gates retain their separate evidence requirements; no marks or historical records change.
+
 
 ### PMA-T23 — Update bilingual operating and capability documents
 
