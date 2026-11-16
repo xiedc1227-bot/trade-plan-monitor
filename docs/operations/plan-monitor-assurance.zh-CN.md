@@ -16,7 +16,7 @@
 
 缺失定义通过既有澄清／补充及审核步骤解决。未变的已审核定义无需每日重新定义；含义、范围、周期或绑定变化时，仍需适用的重新审核。澄清不代表运行时事件已发生。保留明确计划审核／启用、适用的持仓／成本及官方事实确认，以及逐机会例外批准。
 
-已验证的H04登记流程仅覆盖Schema5 ordinary `REVIEWED_FACT/TRADE_DATE`准确叶子。A=true不满足B，明确登记的B=false保持为false；其它归属和范围不属于该已验收流程。这些例子证明具体行为，不提供总体人工步骤数或减少比例（[R103](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r103--精确逐叶登记与完整日历重评)）。
+已验证的H04选择和登记流程仅覆盖Schema5 ordinary `REVIEWED_FACT/TRADE_DATE`准确叶子。选择界面及有界浏览器流程已在[R97/R103](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)接受。A=true不满足B，明确登记的B=false保持为false；Schema10普通`OFFICIAL_DAILY_CLOSE` / `REVIEWED_FACT` / `TRADE_DATE`人工事实支持仍未接受，其它归属和范围不属于该已验收流程。这些例子证明具体行为，不提供总体人工步骤数或减少比例（[R103](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r103--精确逐叶登记与完整日历重评)）。
 
 ## PMA-O04 — 分别理解条件、执行及通知
 
@@ -30,6 +30,8 @@
 
 ## PMA-O06 — 核对实际验收与安装限制
 
-工程检查、准确版本的有限语料验收及实际安装就绪分别报告。完整11门禁运行仍为FAILED（[R140](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r140--完整冻结回归保留七项失败)）。随后定向验证修复原草稿就绪503（[R141](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r141--有界缺值草稿就绪查询不缩小规则范围)）及五个联动／P3浏览器失败（[R142](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r142--完整来源浏览器正例保留原计划阻断)）。后者保留原缩略来源BLOCKED用例，另用完整来源和独立人工补充验证正例。仅该离线夹具的输入预算从50,000字符调整为既有界面声明的200,000字符，原超限失败保留。这是人工辅助流程验证，不代表原始自动提取验收或新的完整测试通过。完整T22/A12及最终验收仍开放。T15/C05及原始03/04正例验收仍阻断，包括F083；真实提取为0/48。不能据这些工程流程宣称某个已部署提取版本通过或任意自然语言准确率。持续入场前禁买取消仍不属于已实现范围（[R48](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r48--t13的用户选定范围边界)、[R136](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r136--联动回放审核与应用启动隔离)）。
+工程检查、准确版本的有限语料验收及实际安装就绪分别报告。完整11门禁运行仍为FAILED（[R140](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r140--完整冻结回归保留七项失败)）。随后定向验证修复原草稿就绪503（[R141](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r141--有界缺值草稿就绪查询不缩小规则范围)）及五个联动／P3浏览器失败（[R142](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r142--完整来源浏览器正例保留原计划阻断)）。后者保留原缩略来源BLOCKED用例，另用完整来源和独立人工补充验证正例。仅该离线夹具的输入预算从50,000字符调整为既有界面声明的200,000字符，原超限失败保留。这是人工辅助流程验证，不代表原始自动提取验收或新的完整测试通过。完整T22/A12及最终验收仍开放。T15/C05及原始03/04正例验收仍阻断，包括F083；真实提取记录为0/48。不能据这些工程流程宣称某个已部署提取版本通过或任意自然语言准确率。
+
+当前状态对账，2026-11-16：[PBS最终验收](../verification/plan-buy-suspension-2026-11-15.zh-CN.md)已在来源绑定获批澄清下实现持续BUY guard，仅替代[R48](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md#pma-r48--t13的用户选定范围边界)旧能力边界。普通续版继承；反弹/跨日/重启不解除，恢复须准确已审核接替版本启用。原始提取与获批澄清/辅助结果仍分开。独立审核的[T13矩阵](../verification/pma-t13-obligation-matrix-2026-11-16.zh-CN.md)保留原始03/04其他义务、X09/X12、Schema10日线人工事实及语料/资源阻断，不关闭T13或C05。未来provider发送前须检查实际共享原子活动账；记录的0/48协调状态不是该账。
 
 唯一一次实际安装审计在打开SQLite前，以 `WAL_SIDECARS_UNAVAILABLE` 和 `PERSISTED_ONLY NOT_READY` 停止。schema、计划、评估及渠道事实均未采集；空数组不表示没有记录。该尝试未重试。这些检查未迁移用户数据库、真实启用计划、采集行情或发送外部通知。实际状态见[安装报告](../verification/plan-readiness-installation.zh-CN.md)和[主验收报告](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)。
