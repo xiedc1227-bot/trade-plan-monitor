@@ -24,7 +24,7 @@ PMA-H01/H02/H04准备 · 2026-11-01 · 代码基线`95dfc7f` · [英文规范版
 - C4：[指数公式](../../../src/trade_plan_monitor/market_index/formulas.py)、[市场状态](../../../src/trade_plan_monitor/decision/market_regime.py)、[相对强弱](../../../src/trade_plan_monitor/decision/relative_strength.py)、[确认选择](../../../src/trade_plan_monitor/decision/confirmation_selection.py)、[大盘联动](../../../src/trade_plan_monitor/decision/market_linkage.py)。数据归属：既有生产指数路径及C3对齐后的个股／日历数据。
 - C5：[P2数量](../../../src/trade_plan_monitor/decision/p2_sizing.py)、[P2费用](../../../src/trade_plan_monitor/decision/p2_economics.py)、[P3金额](../../../src/trade_plan_monitor/decision/p3_capital.py)、[当前金额输入](../../../src/trade_plan_monitor/state/p3_current.py)。数据归属：C3报价／官方申报规则及明确确认的模拟账本／成本声明。
 - C6：[日线风险](../../../src/trade_plan_monitor/decision/daily_risk.py)、[信号生命周期](../../../src/trade_plan_monitor/decision/unified_lifecycle.py)、[日线核算](../../../src/trade_plan_monitor/state/daily_accounting.py)、[动作来源权限](../../../src/trade_plan_monitor/state/source_action_authority.py)。风险归属、持仓及确认窗口独立于条件真假。
-- C7：[原生目标resolver](../../../src/trade_plan_monitor/domain/reviewed_fact_targets.py)、[准入](../../../src/trade_plan_monitor/web/daily_service.py)、[实际SQL证据重检](../../../src/trade_plan_monitor/state/reviewed_fact_authority.py)、[公开DailyFactCommand](../../../src/trade_plan_monitor/web/routers/daily_plans.py)。归属：实际原始版本／审核、准确条件及已完成观察。公开后端现仅接入已测schema5普通TRADE_DATE子集，选择界面仍待完成。
+- C7：[原生目标resolver](../../../src/trade_plan_monitor/domain/reviewed_fact_targets.py)、[准入](../../../src/trade_plan_monitor/web/daily_service.py)、[实际SQL证据重检](../../../src/trade_plan_monitor/state/reviewed_fact_authority.py)、[公开DailyFactCommand](../../../src/trade_plan_monitor/web/routers/daily_plans.py)。归属：实际原始版本／审核、准确条件及已完成观察。已测Schema5普通`REVIEWED_FACT` / `TRADE_DATE`子集的公开登记和选择界面工程已接受，不证明Schema10人工事实支持。
 
 ## PAI-S02 — 原提示词中的行情定义
 
@@ -53,14 +53,14 @@ PMA-H01/H02/H04准备 · 2026-11-01 · 代码基线`95dfc7f` · [英文规范版
 | --- | --- | --- | --- | --- |
 | PAI-12 | S03:45–51。完整日线收复25.99在前，之后25.5–26.0回踩不破并再次收起，AND成交不异常放大AND相对深证成指不再转弱，才考虑第一笔100股。 | 明确顺序／价格片段可自动；回踩／量能／强弱细节缺定义。 | C2 `DAILY_PRIOR_CLOSE`及C1比较／序列；C3/C4。 | 保留先后及全部限定。不自动选择触及／收盘、端点、收起门槛或相对窗口。当前价高于25.99、单根反弹或工程witness均不是完整来源规则。 |
 | PAI-13 | S04:59–73。首次完整收复25.99，再25.7–26.0回踩／收起为首笔100；进一步站稳26.40并回踩为第二笔100；末笔100保留，上限300。 | 已定义阶段／数量片段可自动；不破／收起／站稳缺定义。 | C2/C6 `AFTER_RULE_COMPLETED`及准确首条逻辑规则身份；C3。 | 首阶段限定不自动成为第二阶段门槛；S04:65“最好”仍是偏好。不产生第三笔或重复第二笔。仍须实际前序／来源／审核证明，原始03不是已审核父版本。 |
-| PAI-14 | S03:51及S04:75。再次跌破24.20创新低后持续空仓；原始03等待新底部结构，不下移25.99。 | 不支持持续入场前取消；恢复定义未决。 | C2/C6具有`RISK_OR_REVIEWED_INVALIDATION`及信号后reset，不承载该持续入场前义务。 | PMA-R48继续约束：不用单个当前bar判断、泛化`REVIEWED_FACT`、新风险线或虚构自动恢复近似。两份原始正例继续阻断，不能标为已验收负例。 |
+| PAI-14 | S03:51及S04:75。再次跌破24.20创新低后持续空仓；原始03等待新底部结构，不下移25.99。 | 在来源绑定的获批PBS澄清下已实现；原始提取仍独立评分。 | Schema10 / `condition-plan-v6` guard：完整5分钟收盘严格低于`2420`分即锁存本计划全部后续BUY；普通续版继承，恢复须准确已审核接替版本启用。 | [PBS验收](../../verification/plan-buy-suspension-2026-11-15.zh-CN.md)仅替代PMA-R48旧能力边界。反弹/跨日/重启不解除，不自动识别底部。原始03/04其他义务及正例验收仍阻断，见[TOM-02–TOM-05](../../verification/pma-t13-obligation-matrix-2026-11-16.zh-CN.md)。 |
 
 ## PAI-S05 — 已交付后端及剩余工作
 
 [PMA-R59](../../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)记录提交`5cb9656`：269项集成＋202项单测＋31项行情＋3项生产邻近＝505项不同聚焦离线检查，与前片有重叠。本次文档未新跑测试。它证明已测schema5普通TRADE_DATE正式日线／分钟目标路径，不证明语料提取、全部schema／owner、实际安装或真实发送。输入匹配本身不授予动作权限；实际本地源复核仍拒绝缺失／纠正观察。
 
-后续普通公开后端已在[PMA-R62](../../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)验收：C1+B+C保留旧无目标字节、服务端派生目标／观察权限及两层历史契约。既有`POST /api/v1/plan-facts`现接受可选`conditionSelection`，仅适用于已交付schema5普通TRADE_DATE子集。既有计划版本详情已能提供T18所需标签/路径，无需新目录接口。界面及联合验收仍待完成。本清单本身不定义新API字段或枚举。
+后续普通公开后端已在[PMA-R62](../../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)验收：C1+B+C保留旧无目标字节、服务端派生目标／观察权限及两层历史契约。既有`POST /api/v1/plan-facts`接受可选`conditionSelection`，仅适用于已交付Schema5普通`REVIEWED_FACT` / `TRADE_DATE`子集。既有计划版本详情提供标签/路径，无需新目录接口。选择界面及有界准确逐叶浏览器流程已在该报告PMA-R97/R103接受。2026-11-16的[TOM-04/TOM-07](../../verification/pma-t13-obligation-matrix-2026-11-16.zh-CN.md)对账明确，来源必需Schema10普通`OFFICIAL_DAILY_CLOSE` / `REVIEWED_FACT` / `TRADE_DATE`组合尚未接受。本清单不定义新API字段或枚举。
 
 PAI-09支持在澄清后证据仍需人工时，核对准确严重风险归属。本清单不证明有必要开放全部提醒／reset／Schema6–9／SIGNAL组合。先从已审核来源确定各必需单元，保留其原生日期／signal及来源／大盘／例外／金额gate。T18负责既有UI选择／就绪展示，T19负责联合边界／风险独立验收，不另建平台。
 
-原始03/04、X09表示／含义、X12实际已审核前序证明及未冻结语料／资源问题保持未决（[PMA-R48/R59](../../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)、[EVA-S02–S04](SPEC-extraction-v12-acceptance.zh-CN.md)）。不编造缺失日期，不降低来源／资源边界，不冻结未审核真值，不宣称正向完整矩阵。真实提取保持0/48；本片文档不涉及provider、服务、用户数据库、迁移、真实采集或发送。README、`plan-extract-v12`及原始报告保持不变。
+原始03/04完整正例验收、X09表示／含义、X12实际已审核前序证明及未冻结语料／资源问题保持未决（[TOM-05–TOM-08](../../verification/pma-t13-obligation-matrix-2026-11-16.zh-CN.md)、[EVA-S02–S04](SPEC-extraction-v12-acceptance.zh-CN.md)）；PBS仅关闭上述澄清后的guard能力。不编造缺失日期，不降低来源／资源边界，不冻结未审核真值，不宣称正向完整矩阵。真实提取保持0/48；本片文档不涉及provider、服务、用户数据库、迁移、真实采集或发送。README、`plan-extract-v12`及原始报告保持不变。

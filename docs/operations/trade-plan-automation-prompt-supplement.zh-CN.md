@@ -22,8 +22,8 @@
 
 ## PGS-03 — 当前边界
 
-本说明仅用于生成写作。已实施公开后端现支持准确schema5普通TRADE_DATE正式日线／已完成分钟选择及服务端派生登记，选择界面仍归T18。本交付不启用其它owner／schema／scope。既有首次审核、官方事实、持仓及逐机会批准仍须保留。数据就绪读取不触发采集。
+本说明仅用于生成写作。Schema5普通`REVIEWED_FACT` / `TRADE_DATE`正式日线／已完成分钟选择及服务端派生登记已实施；选择界面及有界准确逐叶浏览器流程已在[PMA-R97/R103](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)通过工程验收。2026-11-16的[TOM-04/TOM-07](../verification/pma-t13-obligation-matrix-2026-11-16.zh-CN.md)对账明确，Schema10普通`OFFICIAL_DAILY_CLOSE` / `REVIEWED_FACT` / `TRADE_DATE`人工事实支持尚未接受；Schema5交付不启用其它owner／schema／scope。既有首次审核、官方事实、持仓及逐机会批准仍须保留。数据就绪读取不触发采集。
 
 不将此补充追加到冻结语料输入或提取器指令来替换既有基线。原始自动结果与经澄清／人工补充的结果分别保存和评分。供未来新计划使用的说明不修复或批准既有语料。
 
-[PMA-R59](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)记录505项聚焦离线后端检查，[PMA-R62](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)验收准确范围的公开配套，均非语料或实际安装验收。原始03/04持续禁买、X09、X12前序／语料及资源问题保持未决；真实提取保持0/48。README及v12字节保持不变。以后若改变提取指令／schema，须使用其独立版本和既有验收gate，不能仍标为v12。
+[PMA-R59](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)记录505项聚焦离线后端检查，[PMA-R62](../verification/2026-10-27-plan-monitor-assurance.zh-CN.md)验收准确范围的公开配套，均非语料或实际安装验收。持续BUY guard在来源绑定获批澄清下已实现，普通续版继承，恢复须准确已审核接替版本启用（[PBS最终验收](../verification/plan-buy-suspension-2026-11-15.zh-CN.md)）；原始与辅助结果保持分开。原始03/04其他义务/完整正例验收、X09、X12前序／语料及资源问题仍未决（[TOM-05–TOM-08](../verification/pma-t13-obligation-matrix-2026-11-16.zh-CN.md)）；真实提取保持0/48。README及v12字节保持不变。以后若改变提取指令／schema，须使用其独立版本和既有验收gate，不能仍标为v12。
